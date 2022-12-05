@@ -138,13 +138,9 @@ class TestReadv:
 if __name__ == '__main__':
     url = sys.argv[1]
     to_read = [(0,10), (129, 20), (4*1024*1024 -10, 10), (8*1024*1024-10, 11)]
-    r1 = read_results(url, to_read)
-    r2 = readv_results(url, to_read)
-    result = True
-    for d1, d2 in zip(r1, r2):
-        result = result and d1 == d2
-    if result:
-        print('SUCCESS!')
-    else: 
-        print('FAILED!')
-        sys.exit(1)
+    TestReadv.setup_class()
+    cls = TestReadv
+    test_suite = TestReadv()
+    chunks = test_suite.max_stable_chunks()
+    for chk in test_suite.readv(chunks):
+        print(chk) 
