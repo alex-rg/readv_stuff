@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 import datetime
 import argparse
+import sys
 import re
+
+from contextlib import contextmanager
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -9,10 +13,17 @@ def parse_arguments():
     parser.add_argument('-o', '--output', help='Path to the output file', default='./readv_times.csv')
     return parser.parse_args()
 
+
 def timestamp2epoch(stamp):
     res = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S.%f %z')
     res = (res - datetime.datetime(1970, 1, 1, tzinfo=res.tzinfo)).total_seconds()
     return res
+
+
+@contextmanager
+def open_stdout():
+    yield sys.stdout
+
 
 def log2csv(log_path, csv_path):
     def _extract_key(match):
@@ -23,7 +34,12 @@ def log2csv(log_path, csv_path):
         return (key, time)
 
     readvs = {}
-    with open(csv_path, 'w') as csv_fd:
+    if csv_path == '-':
+        opener = open_stdout
+    else:
+        opener = lambda: open(path, 'w')
+
+    with opener() as csv_fd:
         with open(log_path) as log_fd:
             timestamp_rexp = r'^\[(?P<time>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:\.]+ \+[0-9]+)\]'
             readv_data_rexp = r'\(handle: [0-9a-fx]+, chunks: (?P<chunks>[0-9]+), total size: (?P<size>[0-9]+)\)'
