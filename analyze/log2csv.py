@@ -66,7 +66,7 @@ def log2csv(log_path, csv_path):
                     except KeyError:
                         print("Found end of readv {0}, but can not find start! Probably log is incomplete".format(key))
                     else:
-                        print('{0},{1},{2}'.format(start, end - start, res), file=csv_fd)
+                        print('{0},{1},{2},{3},{4}'.format(start, end - start, res, key[0],key[1]), file=csv_fd)
 
 
 if __name__ == '__main__':
