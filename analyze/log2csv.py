@@ -44,7 +44,7 @@ def log2csv(log_path, csv_path):
             timestamp_rexp = r'^\[(?P<time>[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:\.]+ \+[0-9]+)\]'
             readv_data_rexp = r'\(handle: [0-9a-fx]+, chunks: (?P<chunks>[0-9]+), total size: (?P<size>[0-9]+)\)'
             readv_send_rexp = r'Message kXR_readv {0} has been successfully sent'.format(readv_data_rexp)
-            readv_end_rexp = r'Got a kXR_(?P<state>ok|error) response to request kXR_readv {0}'.format(readv_data_rexp)
+            readv_end_rexp = r'(?:Got a kXR_(?P<state>ok|error) response to request|Handling error while processing) kXR_readv {0}'.format(readv_data_rexp)
 
             start_rexp = re.compile(r'{0}.*{1}'.format(timestamp_rexp, readv_send_rexp))
             end_rexp = re.compile(r'{0}.*{1}'.format(timestamp_rexp, readv_end_rexp))
