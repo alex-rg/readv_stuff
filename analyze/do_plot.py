@@ -11,6 +11,7 @@ def parse_args():
     parser.add_argument('-r', '--resolution', help='Resolution, in dpi', default=300, type=int)
     parser.add_argument('-b', '--bins', help='Number of bins for histogram', type=int)
     parser.add_argument('-t', '--type', help='Which plot to draw. Either histogram, ecdf or bivalue. Default is histogram', default='histogram')
+    parser.add_argument('-w', '--what', help='What to plot. Either duration or chunks', default='duration')
     args = parser.parse_args()
     return args
 
@@ -21,14 +22,21 @@ if __name__ == '__main__':
     kwargs = {}
     if args.bins:
         kwargs['bins'] = args.bins
+    x_val = args.what
+    if x_val == 'chunks':
+        title = 'readv chunks'
+        xtitle = 'Number of chunks'
+    else:
+        title = 'readv operations'
+        xtitle = 'duration, seconds'
     if args.type == 'ecdf':
-        plt = seaborn.displot(data, x='duration', kind='ecdf')
+        plt = seaborn.displot(data, x=x_val, kind='ecdf')
         plt.set(title='readv operations ECDF')
-        plt.set_xlabels('duration, seconds')
+        plt.set_xlabels(xtitle)
     if args.type == 'histogram':
-        plt = seaborn.displot(data, x='duration', hue='state', log_scale=(False, True), **kwargs)
-        plt.set(title='readv operations')
-        plt.set_xlabels('duration, seconds')
+        plt = seaborn.displot(data, x=x_val, hue='state', log_scale=(False, True), **kwargs)
+        plt.set(title=title)
+        plt.set_xlabels(xtitle)
     elif args.type == 'bivalue':
         plt = seaborn.displot(data, x='duration', hue='state', y='chunks', **kwargs)
         plt.set_xlabels('duration, seconds')
