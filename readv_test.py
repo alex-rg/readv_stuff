@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from random import randint
+from tempfile import NamedTemporaryFile
 
 from XRootD import client
 from XRootD.client.flags import QueryCode
@@ -16,9 +17,18 @@ except ImportError:
     from urllib.parse import urlparse
 
 
+TEST_FILE_SIZE = 100*1024*1024
+
 
 
 class TestReadv:
+    def read_local(self, chunks):
+        res = []
+        for off, sz in chunks:
+            self.testfile_fd.seek(off)
+            res.append(self.testfile_fd.read(sz))
+        return res
+
     def read(self, chunks):
         res = []
         with client.File() as f:
@@ -50,27 +60,6 @@ class TestReadv:
 
         return res
 
-    @staticmethod
-    def get_max_iov(url):
-        cl = client.FileSystem(url)
-        status, response = cl.query(QueryCode.CONFIG, 'readv_iov_max')
-
-        if not status.ok:
-            raise RuntimeError("Can not query server: {0}".format(status))
-
-        return int(response.strip())
-
-    @staticmethod
-    def file_size(url):
-        with client.File() as f:
-            st, _ = f.open(url)
-            if not st.ok:
-                raise RuntimeError("Can not open file {0} for stat: {1}".format(url, st))
-            st, res = f.stat()
-            if not st.ok:
-                raise RuntimeError("Can not stat file {0}: {1}".format(url, st))
-            return res.size
-
     @classmethod
     def setup_class(cls):
         for attr, varname in [('url', 'TEST_FILE_URL'), ('block_size', 'FILE_BLOCK_SIZE')]:
@@ -79,9 +68,48 @@ class TestReadv:
             except KeyError:
                 raise RuntimeError("Environment variable {0} not set -- set it, please.".format(varname))
         cls.block_size = int(cls.block_size)
+
+        #Create test file
+        cls.testfile_fd = NamedTemporaryFile()
+        #Populate file with some data
+        bytes_written = cls.testfile_fd.write(os.urandom(TEST_FILE_SIZE))
+        if bytes_written != TEST_FILE_SIZE:
+            raise RuntimeError("Can not write {0} bytes to local file, {1} written.".format(TEST_FILE_SIZE, bytes_written))
+        cls.file_size = bytes_written
+
+        #Copy file to the server
         purl = urlparse(cls.url)
-        cls.max_iov = cls.get_max_iov(purl.scheme + '://' + purl.netloc)
-        cls.file_size = cls.file_size(cls.url)
+        cls.server_url = purl.scheme + '://' + purl.netloc
+        fs = client.FileSystem(cls.server_url)
+        resp, _ = fs.copy(cls.testfile_fd.name, cls.url)
+        cls.copy_res = resp.status
+        cls.copy_message = resp.message
+
+        #Get max_iov
+        status, response = fs.query(QueryCode.CONFIG, 'readv_iov_max')
+        if not status.ok:
+            raise RuntimeError("Can not query server: {0}".format(status))
+        cls.max_iov = int(response.strip())
+
+    @classmethod
+    def teardown_class(cls):
+        purl = urlparse(cls.url)
+        fs = client.FileSystem(cls.server_url) 
+        resp, _ = fs.rm(purl.path)
+        if resp.status != 0:
+            raise RuntimeError("Can not delete file: {1}".format(resp.message))
+        cls.testfile_fd.close()
+
+    @pytest.fixture
+    def file_stat(self):
+        with client.File() as f:
+            st, _ = f.open(self.url)
+            if not st.ok:
+                raise RuntimeError("Can not open file {0} for stat: {1}".format(url, st))
+            st, res = f.stat()
+            if not st.ok:
+                raise RuntimeError("Can not stat file {0}: {1}".format(url, st))
+            return res
 
     @pytest.fixture
     def max_stable_chunks(self):
@@ -106,7 +134,6 @@ class TestReadv:
     @pytest.fixture
     def block_borders(self):
         nchunks = self.file_size // self.block_size
-        print([(i, self.block_size+1) for i in range(0, self.file_size-self.block_size, 2*self.block_size) ] )
         return [(i*(self.block_size)-1, 2) for i in range(1, min(self.max_iov, nchunks)) ]
 
     @pytest.fixture
@@ -117,8 +144,18 @@ class TestReadv:
     def do_compare(self, chunks):
         r1 = self.read(chunks)
         r2 = self.readv(chunks)
-        for d1, d2 in zip(r1, r2):
-            assert d1 == d2
+        r3 = self.read_local(chunks)
+        for d1, d2, d3 in zip(r1, r2, r3):
+            assert d1 == d2 == d3
+
+    def test_copy(self):
+        "Test async copy"
+        print(self.copy_message)
+        assert self.copy_res == 0
+
+    def test_filesize(self, file_stat):
+        "test that file size on server match the real one"
+        assert file_stat.size == self.file_size
 
     def test_max_chunks(self, max_stable_chunks):
         "Test readv with maximum number of chunks"
