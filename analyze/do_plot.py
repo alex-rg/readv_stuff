@@ -11,7 +11,7 @@ def parse_args():
     parser.add_argument('-r', '--resolution', help='Resolution, in dpi', default=300, type=int)
     parser.add_argument('-b', '--bins', help='Number of bins for histogram', type=int)
     parser.add_argument('-t', '--type', help='Which plot to draw. Either histogram, ecdf or bivalue. Default is histogram', default='histogram')
-    parser.add_argument('-w', '--what', help='What to plot. Either duration or chunks', default='duration')
+    parser.add_argument('-w', '--what', help='What to plot. Either duration, scatter or chunks', default='duration')
     args = parser.parse_args()
     return args
 
@@ -23,12 +23,19 @@ if __name__ == '__main__':
     if args.bins:
         kwargs['bins'] = args.bins
     x_val = args.what
+
     if x_val == 'chunks':
         title = 'readv chunks'
         xtitle = 'Number of chunks'
-    else:
+    elif x_val == 'duration':
         title = 'readv operations'
         xtitle = 'duration, seconds'
+    elif x_val == 'scatter':
+        title = 'request "scatter"'
+        xtitle = 'bytes'
+    else:
+        raise ValueError("Unknown value to plot: {0}".format(x_val))
+
     if args.type == 'ecdf':
         plt = seaborn.displot(data, x=x_val, kind='ecdf')
         plt.set(title='readv operations ECDF')
