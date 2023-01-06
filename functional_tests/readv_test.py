@@ -37,13 +37,14 @@ class TestReadv:
         return cksum
 
     @pytest.fixture(scope='class')
-    def test_file_creation_result(self, test_file_content):
+    def test_file_creation_result(self, test_file_content, request):
         fd, testfile = mkstemp(dir='./tmp')
         bytes_written = os.write(fd, test_file_content)
         os.close(fd)
         assert bytes_written == TEST_FILE_SIZE
         yield bytes_written, testfile
-        os.unlink(testfile)
+        if request.node.session.testsfailed == 0:
+            os.unlink(testfile)
 
     @pytest.fixture(scope='class')
     def test_file(self, test_file_creation_result):
