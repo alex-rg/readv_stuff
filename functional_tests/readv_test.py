@@ -8,6 +8,7 @@ import zlib
 import pytest
 import subprocess
 
+from itertools import product
 from random import randint
 from tempfile import mkstemp
 from abc import ABC, abstractmethod
@@ -92,12 +93,17 @@ class TestReadv:
             chunk = self.max_iov
         return [(i*step, chunk) for i in range(1, self.max_iov+1)]
 
-    @pytest.fixture
-    def random_chunks(self, test_file_size):
+    @pytest.fixture(
+            params=product(
+                    [2**i for i in range(1, 11)],
+                    [i for i in range(1, 11)],
+                    [2**i for i in range(8, 16)],
+                )
+        )
+    def random_chunks(self, test_file_size, request):
         chunks = []
-        min_size = 10
-        max_size = 128
-        for _ in range(randint(1, self.max_iov)):
+        n, min_size, max_size = request.param
+        for _ in range(n):
             chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
         return chunks
 
