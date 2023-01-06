@@ -1,63 +1,33 @@
 #!/usr/bin/env python2
 from __future__ import print_function
 
+import re
 import os
 import sys
+import zlib
 import pytest
+import subprocess
 
 from random import randint
-from tempfile import NamedTemporaryFile
+from tempfile import mkstemp
+from abc import ABC, abstractmethod
 
-from XRootD import client
+from XRootD import client as xrd_client
 from XRootD.client.flags import QueryCode
 
-try:
-    from urlparse import urlparse
-except ImportError:
-    from urllib.parse import urlparse
+from file_access_clients import FallbackClient, PyXrootdClient, GfalCMDClient
 
 
 TEST_FILE_SIZE = 100*1024*1024
 
 
-
 class TestReadv:
     def read_local(self, chunks):
         res = []
-        for off, sz in chunks:
-            self.testfile_fd.seek(off)
-            res.append(self.testfile_fd.read(sz))
-        return res
-
-    def read(self, chunks):
-        res = []
-        with client.File() as f:
-            st, _ = f.open(self.url)
-            if not st.ok:
-                raise RuntimeError("Can not open file {0} for read: {1}".format(self.url, st))
-
+        with open(self.testfile, 'rb') as fd:
             for off, sz in chunks:
-                st, tres = f.read(offset=off, size=sz)
-                if not st.ok:
-                    raise RuntimeError("Can not read file {0} at {1},{2}: {3}".format(self.url, off, sz, st))
-                res.append(tres) 
-
-        return res
-
-    def readv(self, chunks):
-        res = []
-        with client.File() as f:
-            st, _ = f.open(self.url)
-            if not st.ok:
-                raise RuntimeError("Can not open file {0} for read: {1}".format(self.url, st))
-
-            st, tres = f.vector_read(chunks)
-            if not st.ok:
-                raise RuntimeError("Can not open file {0} for read: {1}".format(self.url, st))
-
-        for chk in tres.chunks:
-            res.append(chk.buffer)
-
+                fd.seek(off)
+                res.append(fd.read(sz))
         return res
 
     @classmethod
@@ -69,47 +39,48 @@ class TestReadv:
                 raise RuntimeError("Environment variable {0} not set -- set it, please.".format(varname))
         cls.block_size = int(cls.block_size)
 
+
+        #Genterate file's content, compute its checksum
+        file_content = os.urandom(TEST_FILE_SIZE)
+        cls.original_cksum = hex(zlib.adler32(file_content))[2:]
+        if len(cls.original_cksum) < 8:
+            cls.original_cksum = '0' * (8 - len(cls.original_cksum)) + cls.original_cksum
+
         #Create test file
-        cls.testfile_fd = NamedTemporaryFile()
-        #Populate file with some data
-        bytes_written = cls.testfile_fd.write(os.urandom(TEST_FILE_SIZE))
+        fd, cls.testfile = mkstemp(dir='./tmp')
+        bytes_written = os.write(fd, file_content)
+        os.close(fd)
+
         if bytes_written != TEST_FILE_SIZE:
             raise RuntimeError("Can not write {0} bytes to local file, {1} written.".format(TEST_FILE_SIZE, bytes_written))
         cls.file_size = bytes_written
 
-        #Copy file to the server
-        purl = urlparse(cls.url)
-        cls.server_url = purl.scheme + '://' + purl.netloc
-        fs = client.FileSystem(cls.server_url)
-        resp, _ = fs.copy(cls.testfile_fd.name, cls.url)
-        cls.copy_res = resp.status
-        cls.copy_message = resp.message
+        #Get client
+        root_client = PyXrootdClient(cls.url)
+        https_client = GfalCMDClient(root_client.https_url)
+        cls.client = FallbackClient(clients=[root_client, https_client], fallback_methods=['upload_file', 'delete_file'])
+        cls.max_iov = cls.client.get_max_iov()
 
-        #Get max_iov
-        status, response = fs.query(QueryCode.CONFIG, 'readv_iov_max')
-        if not status.ok:
-            raise RuntimeError("Can not query server: {0}".format(status))
-        cls.max_iov = int(response.strip())
+        #Upload file
+        cls.copy_res, cls.copy_message = cls.client.upload_file(cls.testfile)
 
     @classmethod
     def teardown_class(cls):
-        purl = urlparse(cls.url)
-        fs = client.FileSystem(cls.server_url) 
-        resp, _ = fs.rm(purl.path)
-        if resp.status != 0:
-            raise RuntimeError("Can not delete file: {1}".format(resp.message))
-        cls.testfile_fd.close()
+        cls.client.delete_file()
+        os.unlink(cls.testfile)
+        #cls.testfile_fd.close()
 
     @pytest.fixture
     def file_stat(self):
-        with client.File() as f:
-            st, _ = f.open(self.url)
-            if not st.ok:
-                raise RuntimeError("Can not open file {0} for stat: {1}".format(url, st))
-            st, res = f.stat()
-            if not st.ok:
-                raise RuntimeError("Can not stat file {0}: {1}".format(url, st))
-            return res
+        return self.client.stat_file()
+
+    @pytest.fixture
+    def file_checksum(self):
+        return self.client.get_file_checksum()
+
+    @pytest.fixture
+    def single_chunk(self):
+        return [(0, 10)]
 
     @pytest.fixture
     def max_stable_chunks(self):
@@ -134,7 +105,7 @@ class TestReadv:
     @pytest.fixture
     def block_borders(self):
         nchunks = self.file_size // self.block_size
-        return [(i*(self.block_size)-1, 2) for i in range(1, min(self.max_iov, nchunks)) ]
+        return [(i*(self.block_size)-1, 2) for i in range(1, min(self.max_iov, nchunks)+1) ]
 
     @pytest.fixture
     def wholefile(self):
@@ -142,8 +113,9 @@ class TestReadv:
         chunks = [(i*self.file_size, self.block_size)]
 
     def do_compare(self, chunks):
-        r1 = self.read(chunks)
-        r2 = self.readv(chunks)
+        assert len(chunks) > 0
+        r1 = self.client.read(chunks)
+        r2 = self.client.readv(chunks)
         r3 = self.read_local(chunks)
         for d1, d2, d3 in zip(r1, r2, r3):
             assert d1 == d2 == d3
@@ -156,6 +128,14 @@ class TestReadv:
     def test_filesize(self, file_stat):
         "test that file size on server match the real one"
         assert file_stat.size == self.file_size
+
+    def test_checksum(self, file_checksum):
+        "test that file size on server match the real one"
+        assert file_checksum[1] == self.original_cksum
+
+    def test_single_chunk(self, single_chunk):
+        "Test readv with one chunk"
+        self.do_compare(single_chunk)
 
     def test_max_chunks(self, max_stable_chunks):
         "Test readv with maximum number of chunks"
@@ -174,10 +154,10 @@ class TestReadv:
 
 if __name__ == '__main__':
     url = sys.argv[1]
-    to_read = [(0,10), (129, 20), (4*1024*1024 -10, 10), (8*1024*1024-10, 11)]
+    cl_root = PyXrootdClient(url)
+    cl_gfal = GfalCMDClient(cl_root.https_url)
+    client = FallbackClient(clients=[cl_root, cl_gfal])
     TestReadv.setup_class()
-    cls = TestReadv
-    test_suite = TestReadv()
-    chunks = test_suite.max_stable_chunks()
-    for chk in test_suite.readv(chunks):
-        print(chk) 
+    tcl = TestReadv()
+    #print(client.upload_file('/etc/centos-release'))
+    print(tcl.do_compare([(82615664, 87), (68552208, 64), (73253419, 62), (1012527, 77), (101888140, 98), (43431262, 64)]))
