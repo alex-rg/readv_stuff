@@ -107,6 +107,20 @@ class TestReadv:
             chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
         return chunks
 
+    @pytest.fixture(
+            params=product(
+                    [i for i in range(1, 11)],
+                    [2**i for i in range(8, 16)],
+                )
+        )
+    def random_chunks1(self, test_file_size, request):
+        chunks = []
+        min_size, max_size = request.param
+        n = randint(1,1024)
+        for _ in range(n):
+            chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
+        return chunks
+
     @pytest.fixture
     def block_borders(self, test_file_size):
         nchunks = test_file_size // self.block_size
@@ -166,6 +180,10 @@ class TestReadv:
     def test_random_chunks(self, random_chunks, test_file):
         "Test readv with random chunks"
         self.do_compare(random_chunks, test_file)
+
+    def test_random_chunks1(self, random_chunks1, test_file):
+        "Test readv with random chunks, different variation"
+        self.do_compare(random_chunks1, test_file)
 
     def test_block_plus_one_chunks(self, block_borders, test_file):
         "Test readv with chunks spanning multiple blocks"
