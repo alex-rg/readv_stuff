@@ -125,11 +125,17 @@ class TestReadv:
                 res.append(fd.read(sz))
         return res
 
-    def do_compare(self, chunks, localfile):
+    def do_compare(self, chunks, localfile, chunks2=None, chunks3=None):
         assert len(chunks) > 0
+
+        if chunks2 is None:
+            chunks2 = chunks
+        if chunks3 is None:
+            chunks3 = chunks
+
         r1 = self.client.read(chunks)
-        r2 = self.client.readv(chunks)
-        r3 = self.read_local(chunks, localfile)
+        r2 = self.client.readv(chunks2)
+        r3 = self.read_local(chunks3, localfile)
         for d1, d2, d3 in zip(r1, r2, r3):
             assert d1 == d2 == d3
 
@@ -164,6 +170,15 @@ class TestReadv:
     def test_block_plus_one_chunks(self, block_borders, test_file):
         "Test readv with chunks spanning multiple blocks"
         self.do_compare(block_borders, test_file)
+
+    @pytest.mark.xfail(strict=True)
+    def test_consistency(self, block_borders, test_file, test_file_size):
+        "Make sure that compare function does compare something"
+        if test_file_size >= 3*1024:
+            chunks = [(0, 1024)]
+            chunks2 = [(1025, 2048)]
+            chunks3 = [(2049,3072)]
+            self.do_compare(chunks, test_file, chunks2=chunks2, chunks3=chunks3)
 
     def test_delete(self):
         "Test file deletion"
