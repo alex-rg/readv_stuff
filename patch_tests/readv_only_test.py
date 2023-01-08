@@ -36,8 +36,11 @@ def parse_args():
     g.add_argument('-l', '--url_list', help="list of urls that can be used for tests")
     g.add_argument('-u', '--url', help="Url to use for tests.")
     parser.add_argument('-n', '--ntimes', help="How many readvs should be issued for a single url. Default is 1", default=1, type=int)
-    parser.add_argument('-t', '--test_type', help="Which test to perform: random or border.", choices=['random', 'border'])
+    parser.add_argument('-N', '--nfiles', help="How many files we should test. Default is 1", default=1, type=int)
+    parser.add_argument('-t', '--test_type', help="Which test to perform: random or border.", choices=['random', 'border'], default='random')
     parser.add_argument('-s', '--silent', help="Do not print output (data read), just request status.", action='store_true')
+    parser.add_argument('-S', '--scatter', help="Scatter of the readv chunks. Default if 4MB.", type=int, default=4*1024*1024)
+    parser.add_argument('-c', '--chunks_sorted', help="Sort chunks in requests.", action='store_true')
     args = parser.parse_args()
     return args
 
@@ -74,7 +77,7 @@ def border_chunks(n, size, block_size=8*1024*1024):
     return [x for x in chunks]
 
 
-def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False):
+def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True):
     with client.File() as f:
         f.open(file_url)
         status, stat = f.stat()
@@ -87,7 +90,12 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 chunks = random_chunks(nchunks, size, scatter, max_len)
             elif test_type == 'border':
                 chunks = border_chunks(nchunks, size)
- 
+            else:
+                raise ValueError("Wrong test type: {0}".format(test_type))
+
+            if sorted_chunks:
+                chunks = sorted(chunks, key=lambda x: x[0])
+
             status, response = f.vector_read(chunks=chunks)
             if not status.ok:
                 raise ValueError(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
@@ -101,8 +109,9 @@ if __name__ == '__main__':
     #server = parse_res.scheme + '://' + parse_res.netloc
     #max_iov, max_ior = get_server_limits(server)
     #while True:
-    if args.url:
-        url = args.url
-    else:
-        url = random_line(args.url_list)
-    do_readvs(url, max_len=2*8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes)
+    for _ in range(args.nfiles):
+        if args.url:
+            url = args.url
+        else:
+            url = random_line(args.url_list)
+        do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted)
