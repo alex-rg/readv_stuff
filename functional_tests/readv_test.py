@@ -111,14 +111,27 @@ class TestReadv:
             params=product(
                     [i for i in range(1, 11)],
                     [2**i for i in range(8, 16)],
+                    [True, False]
                 )
         )
     def random_chunks1(self, test_file_size, request):
         chunks = []
-        min_size, max_size = request.param
+        min_size, max_size, do_sort = request.param
         n = randint(1,1024)
         for _ in range(n):
             chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
+        if do_sort:
+            chunks = sorted(chunks, key=lambda x: x[0])
+        return chunks
+
+    @pytest.fixture(params=[i for i in range(1, 1025, 10)])
+    def random_chunks_one_byte(self, test_file_size, request):
+        "Random chunks with 1 byte length"
+        chunks = []
+        n = request.param
+        for _ in range(n):
+            chunks.append( (randint(0, test_file_size - 1), 1) )
+        chunks = sorted(chunks, key=lambda x: x[0])
         return chunks
 
     @pytest.fixture
@@ -150,6 +163,7 @@ class TestReadv:
         r1 = self.client.read(chunks)
         r2 = self.client.readv(chunks2)
         r3 = self.read_local(chunks3, localfile)
+        print("CHUNKS=", chunks)
         for d1, d2, d3 in zip(r1, r2, r3):
             assert d1 == d2 == d3
 
@@ -184,6 +198,10 @@ class TestReadv:
     def test_random_chunks1(self, random_chunks1, test_file):
         "Test readv with random chunks, different variation"
         self.do_compare(random_chunks1, test_file)
+
+    def test_random_chunks_one_byte(self, random_chunks_one_byte, test_file):
+        "Test readv with random chunks of 1 byte length"
+        self.do_compare(random_chunks_one_byte, test_file)
 
     def test_block_plus_one_chunks(self, block_borders, test_file):
         "Test readv with chunks spanning multiple blocks"
