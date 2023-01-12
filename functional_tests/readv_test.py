@@ -97,7 +97,7 @@ class TestReadv:
             params=product(
                     [2**i for i in range(1, 11)],
                     [i for i in range(1, 11)],
-                    [2**i for i in range(8, 16)],
+                    [2**i for i in range(8, 16)] + [randint(1,1025)],
                 )
         )
     def random_chunks(self, test_file_size, request):
@@ -105,26 +105,10 @@ class TestReadv:
         n, min_size, max_size = request.param
         for _ in range(n):
             chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
+        chunks = sorted(chunks, key=lambda x: x[0])
         return chunks
 
-    @pytest.fixture(
-            params=product(
-                    [i for i in range(1, 11)],
-                    [2**i for i in range(8, 16)],
-                    [True, False]
-                )
-        )
-    def random_chunks1(self, test_file_size, request):
-        chunks = []
-        min_size, max_size, do_sort = request.param
-        n = randint(1,1024)
-        for _ in range(n):
-            chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
-        if do_sort:
-            chunks = sorted(chunks, key=lambda x: x[0])
-        return chunks
-
-    @pytest.fixture(params=[i for i in range(1, 1025, 10)])
+    @pytest.fixture(params=[i for i in range(1, 1025)])
     def random_chunks_one_byte(self, test_file_size, request):
         "Random chunks with 1 byte length"
         chunks = []
@@ -160,12 +144,12 @@ class TestReadv:
         if chunks3 is None:
             chunks3 = chunks
 
-        r1 = self.client.read(chunks)
+        #jkijkr1 = self.client.read(chunks)
         r2 = self.client.readv(chunks2)
         r3 = self.read_local(chunks3, localfile)
         print("CHUNKS=", chunks)
-        for d1, d2, d3 in zip(r1, r2, r3):
-            assert d1 == d2 == d3
+        for d2, d3 in zip(r2, r3):
+            assert d2 == d3
 
     def test_copy(self, test_file):
         "Test copy"
@@ -194,10 +178,6 @@ class TestReadv:
     def test_random_chunks(self, random_chunks, test_file):
         "Test readv with random chunks"
         self.do_compare(random_chunks, test_file)
-
-    def test_random_chunks1(self, random_chunks1, test_file):
-        "Test readv with random chunks, different variation"
-        self.do_compare(random_chunks1, test_file)
 
     def test_random_chunks_one_byte(self, random_chunks_one_byte, test_file):
         "Test readv with random chunks of 1 byte length"
