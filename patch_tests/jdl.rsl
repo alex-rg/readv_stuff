@@ -1,0 +1,10 @@
+&( executable = "job_wrapper.sh" )
+( stdout = "stdout" )
+( stderr = "stderr" )
+( inputfiles = ( "job_wrapper.sh" "" ) ( "readv_only_test.py" "" ) )
+( outputfiles = ( "stdout" "" ) ( "stderr" "" ) )
+( wallTime="2 h" )
+( queue = "EL7" )
+( jobname = "Test vector read" )
+( memory = 1024 )
+
