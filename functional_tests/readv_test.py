@@ -111,10 +111,11 @@ class TestReadv:
     @pytest.fixture(params=[i for i in range(1, 1025)])
     def random_chunks_one_byte(self, test_file_size, request):
         "Random chunks with 1 byte length"
-        chunks = []
+        chunks = set()
         n = request.param
         for _ in range(n):
-            chunks.append( (randint(0, test_file_size - 1), 1) )
+            chunks.add( (randint(0, test_file_size - 1), 1) )
+        chunks = [x for x in chunks]
         chunks = sorted(chunks, key=lambda x: x[0])
         return chunks
 
