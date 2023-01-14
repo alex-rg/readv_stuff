@@ -45,6 +45,6 @@ if __name__ == '__main__':
         plt.set(title=title)
         plt.set_xlabels(xtitle)
     elif args.type == 'bivalue':
-        plt = seaborn.displot(data, x='duration', hue='state', y='chunks', **kwargs)
-        plt.set_xlabels('duration, seconds')
+        plt = seaborn.displot(data, x=x_val, y='chunks', **kwargs)
+        plt.set_xlabels('scatter, bytes')
     plt.savefig(args.output, dpi=args.resolution)
