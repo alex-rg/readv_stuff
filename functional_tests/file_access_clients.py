@@ -114,6 +114,7 @@ class PyXrootdClient(FileAccessClient):
 
             st, tres = f.vector_read(chunks)
             if not st.ok:
+                print("Error while reading chunks {0}".format(chunks))
                 raise RuntimeError("Can not readv file {0}: {1}".format(self.url, st))
 
         for chk in tres.chunks:
@@ -124,7 +125,7 @@ class PyXrootdClient(FileAccessClient):
     def upload_file(self, local_path):
         fs = xrd_client.FileSystem(self.server_url)
         st, resp = fs.copy(local_path, self.url)
-        return (st, resp)
+        return (0 if st.ok else 1, resp)
 
     def download_file(self, local_path):
         raise NotImplementedError
@@ -186,6 +187,8 @@ class PyXrootdClient(FileAccessClient):
         print("Location=|{0}|".format(netloc))
         if not re.match('^.*:[0-9]+$', netloc):
             netloc = netloc + ':1094'
+        else:
+           netloc = re.sub(':[0-9]+$', ':1094', netloc)
 
         return 'https://' + netloc + self.path
 
