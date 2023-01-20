@@ -25,6 +25,12 @@ TEST_FILE_SIZE = 100*1024*1024
 
 
 class TestReadv:
+    @staticmethod
+    def adler32(data):
+        cksum = hex(zlib.adler32(data))[2:]
+        if len(cksum) < 8:
+            cksum = '0' * (8 - len(cksum)) + cksum
+        return cksum
 
     @pytest.fixture(scope='class')
     def test_file_content(self):
@@ -32,10 +38,7 @@ class TestReadv:
 
     @pytest.fixture(scope='class')
     def test_file_checksum(self, test_file_content):
-        cksum = hex(zlib.adler32(test_file_content))[2:]
-        if len(cksum) < 8:
-            cksum = '0' * (8 - len(cksum)) + cksum
-        return cksum
+        return self.adler32(test_file_content)
 
     @pytest.fixture(scope='class')
     def test_file_creation_result(self, test_file_content, request):
@@ -55,6 +58,13 @@ class TestReadv:
     def test_file_size(self, test_file_creation_result):
         return test_file_creation_result[0]
 
+    @pytest.fixture
+    def download_path(self, test_file, scope='class'):
+        path = test_file + '_download'
+        yield path
+        if os.path.exists(path):
+           os.unlink(path)
+
     @classmethod
     def setup_class(cls):
         for attr, varname in [('url', 'TEST_FILE_URL'), ('block_size', 'FILE_BLOCK_SIZE')]:
@@ -68,7 +78,7 @@ class TestReadv:
         root_client = PyXrootdClient(cls.url)
         https_client = GfalCMDClient(root_client.https_url)
         cls.client = FallbackClient(clients=[root_client, https_client], fallback_methods=['upload_file', 'delete_file'])
-        cls.max_iov = 1024#cls.client.get_max_iov()
+        cls.max_iov = cls.client.get_max_iov()
 
     @pytest.fixture
     def file_stat(self):
@@ -157,6 +167,16 @@ class TestReadv:
         copy_res, copy_message = self.client.upload_file(test_file)
         print(copy_message)
         assert copy_res == 0
+
+    def test_download(self, test_file, download_path, file_checksum):
+        "Test file download"
+        copy_res, copy_message = self.client.download_file(download_path)
+        print(copy_message)
+        assert copy_res == 0
+        with open(download_path, 'rb') as fd:
+            content = fd.read()
+        local_cksum = self.adler32(content)
+        assert local_cksum == file_checksum[1]
 
     def test_filesize(self, file_stat, test_file_size):
         "test that file size on server match the real one"
