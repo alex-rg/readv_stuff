@@ -68,7 +68,7 @@ class TestReadv:
         root_client = PyXrootdClient(cls.url)
         https_client = GfalCMDClient(root_client.https_url)
         cls.client = FallbackClient(clients=[root_client, https_client], fallback_methods=['upload_file', 'delete_file'])
-        cls.max_iov = cls.client.get_max_iov()
+        cls.max_iov = 1024#cls.client.get_max_iov()
 
     @pytest.fixture
     def file_stat(self):
@@ -145,7 +145,7 @@ class TestReadv:
         if chunks3 is None:
             chunks3 = chunks
 
-        #jkijkr1 = self.client.read(chunks)
+        r1 = self.client.read(chunks)
         r2 = self.client.readv(chunks2)
         r3 = self.read_local(chunks3, localfile)
         print("CHUNKS=", chunks)
