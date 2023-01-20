@@ -128,7 +128,9 @@ class PyXrootdClient(FileAccessClient):
         return (0 if st.ok else 1, resp)
 
     def download_file(self, local_path):
-        raise NotImplementedError
+        fs = xrd_client.FileSystem(self.server_url)
+        st, resp = fs.copy(self.url, local_path)
+        return (0 if st.ok else 1, st if st.ok else resp)
 
     def delete_file(self):
         #For safety: do not delete anything except my files
