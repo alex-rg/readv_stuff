@@ -20,8 +20,7 @@ from file_access_clients import FallbackClient, PyXrootdClient, GfalCMDClient
 
 
 TEST_FILE_SIZE = 100*1024*1024
-
-
+CACHE_SIZE = 4*1024*1024
 
 
 class TestReadv:
@@ -108,13 +107,20 @@ class TestReadv:
                     [2**i for i in range(1, 11)],
                     [i for i in range(1, 11)],
                     [2**i for i in range(8, 16)] + [randint(1,1025)],
+                    [i for i in range(CACHE_SIZE, TEST_FILE_SIZE, 3*CACHE_SIZE)],
                 )
         )
     def random_chunks(self, test_file_size, request):
-        chunks = []
-        n, min_size, max_size = request.param
+        chunks = set()
+        n, min_size, max_size, request_end = request.param
         for _ in range(n):
-            chunks.append( (randint(0, test_file_size - max_size), randint(min_size, max_size)) )
+            if request_end > max_size:
+                b = request_end - max_size
+            else:
+                b = 0
+                max_size = request_end
+            chunks.add( (randint(0, b), randint(min_size, max_size)) )
+        chunks = [x for x in chunks]
         chunks = sorted(chunks, key=lambda x: x[0])
         return chunks
 
@@ -159,8 +165,8 @@ class TestReadv:
         r2 = self.client.readv(chunks2)
         r3 = self.read_local(chunks3, localfile)
         print("CHUNKS=", chunks)
-        for d2, d3 in zip(r2, r3):
-            assert d2 == d3
+        for d1, d2, d3 in zip(r1, r2, r3):
+            assert d1 == d2 == d3
 
     def test_copy(self, test_file):
         "Test copy"
