@@ -118,9 +118,9 @@ def log2csv(log_path, csv_path, req_type='readv'):
                     else:
                         lines_written += 1
                         if req_type == 'readv':
-                            print('{0},{1},{2},{3},{4},{5}'.format(start, end - start, res, key[0],key[1], buf_end - buf_start), file=csv_fd)
+                            print('{0},{1},{2},{3},{4},{5},{6}'.format(start, end - start, res, key[0],key[1], buf_end - buf_start, buf_start), file=csv_fd)
                         else:
-                            print('{0},{1},{2},{3},{4}'.format(start, end - start, res, key[0],key[1]), file=csv_fd)
+                            print('{0},{1},{2},{3},{4},{5},{6}'.format(start, end - start, res, key[0],key[1], key[0], key[1]), file=csv_fd)
                         if (lines_written + 1) % 5 == 0:
                             csv_fd.flush()
             print("Max spread = {0}, request = {1}, buf_start={2}, buf_end={3}".format(max_spread, key, best_buf_start, best_buf_end), file=sys.stderr)
