@@ -11,4 +11,4 @@ docker run -d \
     --network ralworker \
     --name test_job_${1} \
     b97af4dd7269 \
-    /bin/bash -c 'echo "172.28.1.1    xrootd.echo.stfc.ac.uk" >> /etc/hosts && su -c "/bin/bash -c \"cd /lhcb_job/repo/custom_production/output/'"${1}"' && ../../start_job.sh\"" --login lhcb001'
+    /bin/bash -c 'echo "172.28.1.1    xrootd.echo.stfc.ac.uk" >> /etc/hosts && su -c "/bin/bash -c \"cd /lhcb_job/user_jobs/'"${1}"' && ../../repo/custom_production/start_user_job.sh\"" --login lhcb001'
