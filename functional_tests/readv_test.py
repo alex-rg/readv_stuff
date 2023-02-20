@@ -21,6 +21,7 @@ from file_access_clients import FallbackClient, PyXrootdClient, GfalCMDClient
 
 TEST_FILE_SIZE = 100*1024*1024
 CACHE_SIZE = 4*1024*1024
+BUFFER_SIZE = 1024*1024
 
 
 class TestReadv:
@@ -71,6 +72,10 @@ class TestReadv:
                 setattr(cls, attr, os.environ[varname])
             except KeyError:
                 raise RuntimeError("Environment variable {0} not set -- set it, please.".format(varname))
+        try:
+            cls.buffer_size = os.environ['BUFFER_SIZE']
+        except KeyError:
+            cls.buffer_size = BUFFER_SIZE
         cls.block_size = int(cls.block_size)
 
         #Get client
@@ -90,6 +95,14 @@ class TestReadv:
     @pytest.fixture
     def single_chunk(self):
         return [(0, 10)]
+
+    @pytest.fixture
+    def bug_chunks(self, test_file_size):
+      if self.buffer_size + 100> test_file_size:
+          res = []
+      else:
+          res = [(100, 271), (20, self.buffer_size + 100), (500, 370)]
+      return res
 
     @pytest.fixture
     def max_stable_chunks(self, test_file_size):
@@ -195,6 +208,10 @@ class TestReadv:
     def test_single_chunk(self, single_chunk, test_file):
         "Test readv with one chunk"
         self.do_compare(single_chunk, test_file)
+
+    def test_bug_chunks(self, bug_chunks, test_file):
+        "Test readv with chunks that cause failure previously due to a bug"
+        self.do_compare(bug_chunks, test_file)
 
     def test_max_chunks(self, max_stable_chunks, test_file, test_file_size):
         "Test readv with maximum number of chunks"
