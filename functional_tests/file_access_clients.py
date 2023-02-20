@@ -61,12 +61,12 @@ class FileAccessClient(ABC):
 
 class GfalCMDClient(FileAccessClient):
     def upload_file(self, local_path):
-        st = subprocess.run([ '/bin/env', '-i', 'X509_USER_PROXY=/lhcb_job/proxy.pem', '/bin/bash', '-l', '-c', 'source /cvmfs/lhcb.cern.ch/group_login.sh && gfal-copy {0} {1}'.format(local_path, self.url)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        st = subprocess.run(['gfal-copy', local_path, self.url], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return st.returncode, st.stdout.decode('utf-8') + '\n\n\n\n' + st.stderr.decode('utf-8')
 
     def delete_file(self):
         if re.match('.*/lhcb:user/lhcb/user/a/arogovsk.*', self.url):
-            st = subprocess.run([ '/bin/env', '-i', 'X509_USER_PROXY=/lhcb_job/proxy.pem', '/bin/bash', '-l', '-c', 'source /cvmfs/lhcb.cern.ch/group_login.sh && gfal-rm {0}'.format(self.url)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            st = subprocess.run(['gfal-rm', self.url], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             res = st.returncode, st.stdout.decode('utf-8') + '\n\n\n\n' + st.stderr.decode('utf-8')
         else:
             res = (1, 'Delete refused for safety reasons')
