@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument('-g', '--group', help='How to group bins. Either WN or GEN', choices=['WN', 'GEN'], default='WN')
     parser.add_argument('-o', '--output', help='Path to the output file', required=True)
     parser.add_argument('-r', '--resolution', help="Plot's resolution", default=300, type=int)
+    parser.add_argument('-n', '--normalize', help="Normalize bins, to show relative results", action='store_true')
     parser.add_argument('file', help='File(s) to process')
     args = parser.parse_args()
     return args
@@ -40,6 +41,7 @@ if __name__ == '__main__':
     data = json.loads(data)
      
     res = {'ID': [], 'status': [], 'host': [], 'gen': []}
+    stats = {'gen': {}, 'host': {}}
     for job in data:
         res['ID'] = job['JobID']
         m = re.match('.*lcg([0-9]+).*', job['HostName'])
@@ -50,33 +52,50 @@ if __name__ == '__main__':
         else:
             res['host'].append(-1)
             res['gen'].append(-1)
-        res['status'].append(job['Status'])
+        status = job['Status']
+        res['status'].append(status)
+
+        for key in stats.keys():
+            val = res[key][-1]
+            if val in stats[key]:
+                if status in stats[key][val]:
+                    stats[key][val][status] += 1
+                else:
+                    stats[key][val][status] = 1
+            else:
+                stats[key][val] = {status: 1}
+
+    title='Number of jobs'
+    ytitle = 'Count'
+    if args.normalize:
+        title='Jobs per ' + args.group
+        ytitle = 'Fraction'
+        norm_coeffs_dict = {}
+        for gen, val in stats['gen'].items():
+            norm_coeffs_dict[gen] = 1.0 / sum(x for x in val.values())
+        norm_coeffs = []
+        for gen in res['gen']:
+            norm_coeffs.append(norm_coeffs_dict[gen])            
+
     data = pandas.DataFrame.from_dict(res)
     x_data = 'host' if args.group == 'WN' else 'gen'
+    xticks = [i for i in range(len(WN_GENS))]
     if x_data == 'host':
-        x_data = 'host' if args.group == 'WN' else 'gen'
         kwargs = {'binwidth': 1}
     else:
         x_data = 'gen'
-        kwargs = {'stat': 'probability', 'multiple': 'stack', 'common_norm': False}
+        kwargs = {'multiple': 'stack'}
+        if args.normalize:
+            kwargs['weights'] =  norm_coeffs
+            kwargs['bins'] = sum(1 for x in stats['gen'])
+            kwargs['shrink'] = 0.8
+            xticks = [i*0.83+0.42 for i in range(len(WN_GENS))]
+
     plt = seaborn.displot(data, x=x_data, hue='status', **kwargs) #, palette=["#00ff00", "#ff0000"])
-    plt.set(title='Number of jobs')
+    plt.set(title=title)
+    plt.set_ylabels(ytitle)
     if args.group == 'WN':
         pyplot.xticks([x[0] for x in WN_GENS], [i[1] for i in WN_GENS], rotation=90)
     else:
-        pyplot.xticks([i for i in range(len(WN_GENS))], [i[1] for i in WN_GENS])
+        pyplot.xticks(xticks, [i[1] for i in WN_GENS], rotation=90)
     plt.savefig(args.output, dpi=args.resolution)
-    #data = pandas.read_csv(args.data)
-
-#    if args.type == 'ecdf':
-#        plt = seaborn.displot(data, x=x_val, kind='ecdf')
-#        plt.set(title='readv operations ECDF')
-#        plt.set_xlabels(xtitle)
-#    if args.type == 'histogram':
-#        plt = seaborn.displot(data, x=x_val, hue='state', log_scale=(False, True), **kwargs)
-#        plt.set(title=title)
-#        plt.set_xlabels(xtitle)
-#    elif args.type == 'bivalue':
-#        plt = seaborn.displot(data, x=x_val, y='chunks', **kwargs)
-#        plt.set_xlabels('scatter, bytes')
-
