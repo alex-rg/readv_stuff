@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('-s', '--silent', help="Do not print output (data read), just request status.", action='store_true')
     parser.add_argument('-S', '--scatter', help="Scatter of the readv chunks. Default if 4MB.", type=int, default=4*1024*1024)
     parser.add_argument('-c', '--chunks_sorted', help="Sort chunks in requests.", action='store_true')
+    parser.add_argument('-C', '--chunks_number', help="Number of chunks in a single request.", type=int, default=1024)
     args = parser.parse_args()
     return args
 
@@ -98,8 +99,9 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
 
             status, response = f.vector_read(chunks=chunks)
             if not status.ok:
-                raise ValueError(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
-            print(f"Readv finished successfully: {status}", file=sys.stderr)
+                print(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
+            else:
+                print(f"Readv finished successfully: {status}", file=sys.stderr)
 
 
 
@@ -114,4 +116,4 @@ if __name__ == '__main__':
             url = args.url
         else:
             url = random_line(args.url_list)
-        do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted)
+        do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
