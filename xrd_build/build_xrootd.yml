@@ -1,0 +1,115 @@
+- name: setup build environment for xrootd
+  hosts: localhost
+  vars:
+    xrootd_local_dir: "/xrootd_src"
+    xrootd_repo_url: "https://github.com/alex-rg/xrootd"
+    xrootd_repo_version: "version_533_with_dh_fix"
+    xrdceph_branch: "bufferedIO"
+    xrootd_tag: "v5.3.3-15"
+  tasks:
+  - name: create repo dir
+    file:
+      path: "{{xrootd_local_dir}}"
+      owner: root
+      group: root
+      mode: 0755
+      state: directory
+
+  - name: install ceph repo
+    copy:
+      content: |
+        [ceph-el7-x86_64]
+        name = ceph-el7-x86_64
+        baseurl = http://mirrors.gridpp.rl.ac.uk/current/ceph-el7-x86_64/RPMS.nautilus/
+        metadata_expire = 7d
+        enabled = 1
+        gpgcheck = 0
+        priority = 40
+        skip_if_unavailable = 0
+      dest: /etc/yum.repos.d/ceph.repo
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: install build packages
+    yum:
+      name: "{{item}}"
+      state: present
+    loop:
+    - cmake3
+    - git
+    - centos-release-scl
+    - devtoolset-7
+    - librados2-devel
+    - libradospp-devel
+    - libradosstriper-devel
+    - krb5-devel
+    - readline-devel
+    - fuse-devel
+    - libxml2-devel
+    - zlib-devel
+    - ncurses-devel
+    - libcurl-devel
+    - libuuid-devel
+    - voms-devel
+    - libmacaroons-devel
+    - json-c-devel
+    - python2-devel
+    - python3-devel
+    - openssl-devel
+    - selinux-policy-devel
+    - doxygen
+    - graphviz
+    - systemd-devel
+    - rpm-build
+
+  - name: clone Xrootd repository
+    command:
+      cmd: git clone -b "{{xrootd_repo_version}}" "{{xrootd_repo_url}}"
+      chdir: "{{xrootd_local_dir}}"
+
+  - name: use custom repository for XrdCeph
+    ansible.builtin.lineinfile:
+      path: "{{xrootd_local_dir}}/xrootd/.gitmodules"
+      regexp: '^.*url =.*xrootd-ceph'
+      line: "        url = https://github.com/stfc/xrootd-ceph"
+
+  - name: use custom branch from XrdCeph
+    ansible.builtin.lineinfile:
+      path: "{{xrootd_local_dir}}/xrootd/.gitmodules"
+      line: "        branch = {{xrdceph_branch}}"
+      insertafter: "EOF"
+
+  - name: update submodule
+    command:
+      cmd: git submodule update --init --recursive --remote
+      chdir: "{{xrootd_local_dir}}/xrootd"
+
+  - name: set tags
+    shell:
+      cmd: "git tag -d {{xrootd_tag}} ; git tag {{xrootd_tag}}"
+      chdir: "{{xrootd_local_dir}}/xrootd/{{item}}"
+    loop: ['', 'src/XrdCeph', 'src/XrdClHttp']
+
+  - name: create srpm
+    command:
+      cmd: "./makesrpm.sh"
+      chdir: "{{xrootd_local_dir}}/xrootd/packaging"
+
+  - name: install srpm
+    shell:
+      cmd: rpm -i xrootd*.rpm
+      chdir: "{{xrootd_local_dir}}/xrootd/packaging"
+
+  - name: put macro
+    copy:
+      content: '%_with_ceph11 1'
+      dest: /usr/lib/rpm/macros.d/macros.xrootd
+      mode: 0644
+      owner: root
+      group: root
+
+  - name: build rpm
+    command:
+      cmd: rpmbuild -ba SPECS/xrootd.spec
+      chdir: /root/rpmbuild
