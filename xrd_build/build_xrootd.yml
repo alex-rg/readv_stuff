@@ -3,9 +3,10 @@
   vars:
     xrootd_local_dir: "/xrootd_src"
     xrootd_repo_url: "https://github.com/alex-rg/xrootd"
-    xrootd_repo_version: "version_533_with_dh_fix"
+    xrdceph_repo_url: "https://github.com/stfc/xrootd-ceph"
+    xrootd_branch: "version_533_with_dh_fix"
     xrdceph_branch: "bufferedIO"
-    xrootd_tag: "v5.3.3-15"
+    xrootd_version: "v5.3.3-15"
   tasks:
   - name: create repo dir
     file:
@@ -65,14 +66,14 @@
 
   - name: clone Xrootd repository
     command:
-      cmd: git clone -b "{{xrootd_repo_version}}" "{{xrootd_repo_url}}"
+      cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}"
       chdir: "{{xrootd_local_dir}}"
 
   - name: use custom repository for XrdCeph
     ansible.builtin.lineinfile:
       path: "{{xrootd_local_dir}}/xrootd/.gitmodules"
       regexp: '^.*url =.*xrootd-ceph'
-      line: "        url = https://github.com/stfc/xrootd-ceph"
+      line: "        url = {{xrdceph_repo_url}}"
 
   - name: use custom branch from XrdCeph
     ansible.builtin.lineinfile:
@@ -87,7 +88,7 @@
 
   - name: set tags
     shell:
-      cmd: "git tag -d {{xrootd_tag}} ; git tag {{xrootd_tag}}"
+      cmd: "git tag -d {{xrootd_version}} ; git tag {{xrootd_version}}"
       chdir: "{{xrootd_local_dir}}/xrootd/{{item}}"
     loop: ['', 'src/XrdCeph', 'src/XrdClHttp']
 
