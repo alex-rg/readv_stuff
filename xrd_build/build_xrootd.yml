@@ -116,6 +116,21 @@
         cmd: git clone -b "{{xrdceph_branch}}" "{{xrdceph_repo_url}}"
         chdir: "{{xrdceph_src_dir}}"
 
+    - name: make sure necessary commits are present
+      block:
+      - name: set up git name
+        shell:
+          cmd:  git config --global user.email tmp@somewhere && git config --global user.name somename
+
+      - name: Pick up commits with dependencies and version fixes
+        shell:
+          cmd: git log | grep -q "{{item}}" || git cherry-pick "{{item}}"
+          chdir: "{{xrdceph_src_dir}}/xrootd-ceph"
+        loop:
+        - afce0f01ad129b8a3e4abd559f0bff0fdbb86317
+        - 67a59214f285c92e266cfd2d45d99df120046e1b
+
+
     - name: create srpm
       command:
         cmd: "./makesrpm.sh --version {{xrdceph_version}} --output {{xrdceph_build_dir}}"
