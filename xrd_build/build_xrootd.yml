@@ -1,12 +1,20 @@
 - name: setup build environment for xrootd
   hosts: localhost
   vars:
+    #Remove all build/src directories before build if they exist
+    clean_xrdceph_dirs: 1
+    clean_xrootd_dirs: 0
+    build_xrootd: 0
+    build_xrdceph: 1
+    xrdceph_package_name: "xrootd-ceph"
+
     xrootd_repo_url: "https://github.com/alex-rg/xrootd"
     xrdceph_repo_url: "https://github.com/stfc/xrootd-ceph"
     xrootd_branch: "version_533_with_dh_fix"
     xrdceph_branch: "bufferedIO"
-    xrootd_version: "v5.3.3-15"
-    xrdceph_version: "v5.3.3-15"
+    xrootd_version: "5.3.3-15"
+    xrdceph_version: "5.5.4-10"
+
     build_dir: /root/build
     src_dir: /root/src
     xrootd_src_dir: "{{src_dir}}/xrootd"
@@ -14,11 +22,25 @@
     xrootd_build_dir: "{{build_dir}}/xrootd"
     xrdceph_build_dir: "{{build_dir}}/xrdceph"
   tasks:
-  - name: create repo dir
+  - name: clean xrootd directories
+    file:
+      path: "{{item}}"
+      state: absent
+    loop: ["{{xrootd_build_dir}}", "{{xrootd_src_dir}}"]
+    when: clean_xrootd_dirs == 1
+
+  - name: clean xrdceph directories
+    file:
+      path: "{{item}}"
+      state: absent
+    loop: ["{{xrdceph_build_dir}}", "{{xrdceph_src_dir}}"]
+    when: clean_xrdceph_dirs == 1
+
+  - name: create necessary dirs
     file:
       path: "{{item}}"
       state: directory
-    loop: ["{{xrootd_build_dir}}", "{{xrdceph_build_dir}}", "{{xrootd_src_dir}}", "{{xrdceph_src_dir}}"]
+    loop: ["{{xrootd_build_dir}}", "{{xrdceph_build_dir}}", "{{xrootd_src_dir}}", "{{xrdceph_src_dir}}", "{{xrootd_build_dir}}/RPMS"]
 
   - name: install ceph repo
     copy:
@@ -69,23 +91,58 @@
     - rpm-build
     - scitokens-cpp-devel
 
-  - name: clone Xrootd repository
-    command:
-      cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}"
-      chdir: "{{xrootd_src_dir}}"
+  - name: build xrootd
+    block:
+    - name: clone Xrootd repository
+      command:
+        cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}"
+        chdir: "{{xrootd_src_dir}}"
 
-  - name: create srpm
-    command:
-      cmd: "./makesrpm.sh --version 5.5.4-00 --define '_with_python3 1' --define '_with_tests 1' --define '_with_scitokens 1' --output {{xrootd_build_dir}}"
-      chdir: "{{xrootd_src_dir}}/xrootd/packaging"
+    - name: create srpm
+      command:
+        cmd: "./makesrpm.sh --version {{xrootd_version}} --define '_with_python3 1' --define '_with_tests 1' --define '_with_scitokens 1' --output {{xrootd_build_dir}}"
+        chdir: "{{xrootd_src_dir}}/xrootd/packaging"
 
-  - name: create output dir
-    file:
-      path: "{{item}}/RPMS"
-      state: directory
-    loop: ["{{xrootd_build_dir}}", "{{xrdceph_build_dir}}"]
+    - name: build rpm
+      shell:
+        cmd: rpmbuild --rebuild --define "_rpmdir RPMS/" --define "_with_python3 1" --define "_with_scitokens 1"  --define "_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" -D "dist .el7"  *.src.rpm
+        chdir: "{{xrootd_build_dir}}"
+    when: build_xrootd == 1
 
-  - name: build rpm
-    shell:
-      cmd: rpmbuild --rebuild --define "_rpmdir RPMS/" --define "_with_python3 1" --define "_with_scitokens 1"  --define "_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" -D "dist .el7"  *.src.rpm
-      chdir: "{{xrootd_build_dir}}"
+  - name: build xrdceph
+    block:
+    - name: clone XrdCeph repository
+      command:
+        cmd: git clone -b "{{xrdceph_branch}}" "{{xrdceph_repo_url}}"
+        chdir: "{{xrdceph_src_dir}}"
+
+    - name: create srpm
+      command:
+        cmd: "./makesrpm.sh --version {{xrdceph_version}} --output {{xrdceph_build_dir}}"
+        chdir: "{{xrdceph_src_dir}}/xrootd-ceph/packaging"
+
+    - name: install srpm
+      shell:
+        cmd: rpm --root {{xrdceph_build_dir}} -i {{xrdceph_build_dir}}/*.src.rpm
+
+    - name: install xrootd headers
+      shell:
+        cmd: yum install -y {{xrootd_build_dir}}/RPMS/*devel*.rpm
+      failed_when: false
+
+    - name: setup package name
+      ansible.builtin.lineinfile:
+        path: "{{xrdceph_build_dir}}/root/rpmbuild/SPECS/xrootd-ceph.spec"
+        regexp: '^Name: '
+        line: "Name:      {{xrdceph_package_name}}"
+
+    - name: build rpm
+      shell:
+        cmd:  source /opt/rh/devtoolset-7/enable && rpmbuild --define "_topdir {{xrdceph_build_dir}}/root/rpmbuild" --ba --define "_rpmdir RPMS/" "SPECS/xrootd-ceph.spec"
+        chdir: "{{xrdceph_build_dir}}/root/rpmbuild"
+
+    - name: copy packages
+      copy:
+        src: "{{xrdceph_build_dir}}/root/rpmbuild/RPMS"
+        dest: "{{xrdceph_build_dir}}"
+    when: build_xrdceph == 1
