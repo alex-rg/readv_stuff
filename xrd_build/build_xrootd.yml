@@ -3,8 +3,8 @@
   vars:
     #Remove all build/src directories before build if they exist
     clean_xrdceph_dirs: 1
-    clean_xrootd_dirs: 0
-    build_xrootd: 0
+    clean_xrootd_dirs: 1
+    build_xrootd: 1
     build_xrdceph: 1
     xrdceph_package_name: "xrootd-ceph"
 
@@ -127,7 +127,7 @@
 
     - name: install xrootd headers
       shell:
-        cmd: yum install -y {{xrootd_build_dir}}/RPMS/*devel*.rpm
+        cmd: yum install -y {{xrootd_build_dir}}/RPMS/*devel*.rpm {{xrootd_build_dir}}/RPMS/*libs*.rpm
       failed_when: false
 
     - name: setup package name
