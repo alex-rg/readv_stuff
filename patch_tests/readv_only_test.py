@@ -37,7 +37,7 @@ def parse_args():
     g.add_argument('-u', '--url', help="Url to use for tests.")
     parser.add_argument('-n', '--ntimes', help="How many readvs should be issued for a single url. Default is 1", default=1, type=int)
     parser.add_argument('-N', '--nfiles', help="How many files we should test. Default is 1", default=1, type=int)
-    parser.add_argument('-t', '--test_type', help="Which test to perform: random or border.", choices=['random', 'border'], default='random')
+    parser.add_argument('-t', '--test_type', help="Which test to perform: random or border.", choices=['random', 'border', 'lhcb_job'], default='random')
     parser.add_argument('-s', '--silent', help="Do not print output (data read), just request status.", action='store_true')
     parser.add_argument('-S', '--scatter', help="Scatter of the readv chunks. Default if 4MB.", type=int, default=4*1024*1024)
     parser.add_argument('-c', '--chunks_sorted', help="Sort chunks in requests.", action='store_true')
@@ -46,20 +46,43 @@ def parse_args():
     return args
 
 
-def random_chunks(n, size, scatter, max_len):
+def random_chunks(n, size, scatter, max_len, interval=None):
     chunks = set()
-    if size > scatter:
-        center = randint(scatter // 2, size - scatter // 2)
-        a, b =center - scatter // 2, center + scatter // 2
+    if interval is None:
+        if size > scatter:
+            center = randint(scatter // 2, size - scatter // 2)
+            a, b =center - scatter // 2, center + scatter // 2
+        else:
+            a, b = 0, size - max_len
+            if b < 0:
+                raise ValueError("File size too small: {0} while max chunk len is {1}".format(size, max_len))
     else:
-        a, b = 0, size - max_len
-        if b < 0:
-            raise ValueError("File size too small: {0} while max chunk len is {1}".format(size, max_len))
+        a, b = interval
     for _ in range(n):
         chunk_len = randint(1, max_len)
         offset = randint(a, b)
         chunks.add( (offset, chunk_len) )
     return [x for x in chunks]
+
+
+def jobsim_chunks(n, size, scatter, max_len, max_iter):
+    if hasattr(jobsim_chunks, "iter"):
+        jobsim_chunks.iter += 1
+    else:
+        jobsim_chunks.iter = 1
+    if jobsim_chunks.iter > max_iter:
+        raise ValueError("Too many iterations, reset the counter")
+    if scatter > size:
+        raise ValueError("File size is too small: {0} while scatter is {1}".format(size, scatter))
+
+    if jobsim_chunks.iter == 1:
+        interval = (0, scatter)
+    elif jobsim_chunks.iter == 2:
+        interval = (size - scatter - 1, size - 1)
+    else:
+        start = int( (size - scatter) * jobsim_chunks.iter / max_iter )
+        interval = ( start , min(start + scatter, size))
+    return random_chunks(n, None, None, max_len, interval)
 
 
 def border_chunks(n, size, block_size=8*1024*1024):
@@ -91,6 +114,8 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 chunks = random_chunks(nchunks, size, scatter, max_len)
             elif test_type == 'border':
                 chunks = border_chunks(nchunks, size)
+            elif test_type == 'lhcb_job':
+                chunks = jobsim_chunks(nchunks, size, scatter, max_len, ntimes)
             else:
                 raise ValueError("Wrong test type: {0}".format(test_type))
 
@@ -102,6 +127,7 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 print(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
             else:
                 print(f"Readv finished successfully: {status}", file=sys.stderr)
+    jobsim_chunks.iter = 0
 
 
 
