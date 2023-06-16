@@ -72,16 +72,16 @@ def jobsim_chunks(n, size, scatter, max_len, max_iter):
         jobsim_chunks.iter = 1
     if jobsim_chunks.iter > max_iter:
         raise ValueError("Too many iterations, reset the counter")
-    if scatter > size:
+    if scatter + max_len + 1 > size:
         raise ValueError("File size is too small: {0} while scatter is {1}".format(size, scatter))
 
     if jobsim_chunks.iter == 1:
         interval = (0, scatter)
     elif jobsim_chunks.iter == 2:
-        interval = (size - scatter - 1, size - 1)
+        interval = (size - scatter - max_len - 1, size - 1 - max_len)
     else:
         start = int( (size - scatter) * jobsim_chunks.iter / max_iter )
-        interval = ( start , min(start + scatter, size))
+        interval = ( min(start, size - max_len - 2) , min(start + scatter, size - max_len - 1))
     return random_chunks(n, None, None, max_len, interval)
 
 
