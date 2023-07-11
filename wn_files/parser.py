@@ -2,6 +2,7 @@
 
 import re
 import sys
+import pytz
 import argparse
 import datetime
 
@@ -20,9 +21,9 @@ def open_stdin(_):
     yield sys.stdin
 
 
-def parse_time(s, tz=None):
+def parse_time(s, tz=False):
     t = time_parser.parse(  s + ( (' ' + tz) if tz is not None else '' )  )
-    return int( (t - datetime.datetime(1970,1,1)).total_seconds() )
+    return int( t.timestamp() )
 
 
 if __name__ == '__main__':
