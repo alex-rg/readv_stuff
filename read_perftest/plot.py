@@ -28,12 +28,12 @@ if __name__ == '__main__':
         for line in fd:
             m = re.match('^JOBS ([0-9]+)$', line)
             if m:
-                jobs = int(m.group(1))
                 if tres:
                     if jobs in res:
                         res[jobs].append( tres )
                     else:
                         res[jobs] = [ tres ]
+                jobs = int(m.group(1))
                 tres = []
 
             m = re.match('^([0-9]+) ([0-9]+)$', line)
@@ -42,7 +42,7 @@ if __name__ == '__main__':
                 estat = int(m.group(2))
                 tres.append( (time, estat) )
 
-    #print(json.dumps(res, indent=2))
+    print(json.dumps(res, indent=2))
     if args.plot_type == 'speed':
         for k in res:
             for i, bunch in enumerate(res[k]):
@@ -56,7 +56,7 @@ if __name__ == '__main__':
                     avg += speed
                     n += 1
                 avg = avg / n
-                plt.errorbar([k + i * 0.03], [avg], [[avg-m], [M-avg]], fmt='o' + colors[i % len(colors)], capsize=6, linewidth=2)
+                plt.errorbar([k + i * 0.03], [avg], [[max(avg-m, 0)], [max(M-avg, 0)]], fmt='o' + colors[i % len(colors)], capsize=6, linewidth=2)
         plt.xlabel('Transfers')
         plt.ylabel('Speed, Bytes/s')
     elif args.plot_type == 'errors':
