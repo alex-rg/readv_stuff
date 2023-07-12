@@ -50,45 +50,21 @@ if __name__ == '__main__':
         res.sort()
         x_vals = []
         y_vals = []
-        for start, end in res:
-            if not x_vals:
-                x_vals = [start, end]
-                y_vals = [1, 0]
+        data = {}
+        arr = [(x[0], 's') for x in res] + [(x[1], 'e') for x in res]
+        arr.sort(key=lambda x: x[0])
+        o_files = 0
+        for val, typ in arr:
+            if typ == 's':
+                o_files += 1
+            elif typ == 'e':
+                o_files -= 1
+            if x_vals and x_vals[-1] == val:
+                y_vals[-1] = o_files
             else:
-                idx = 0
-                y_val = 1
-                while idx < len(x_vals) and x_vals[idx] < start:
-                    y_val = y_vals[idx]
-                    idx += 1
-
-                if idx >= len(x_vals):
-                    x_vals.append(start)
-                    y_vals.append(1)
-                else:
-                    if x_vals[idx] > start:
-                        x_vals.insert(idx, start)
-                        y_vals.insert(idx, y_val + 1)
-                        idx += 1
-                    else:
-                        y_vals[idx] += 1
-
-                while idx < len(x_vals) and x_vals[idx] < end:
-                    y_val = y_vals[idx]
-                    if x_vals[idx] > start:
-                        y_vals[idx] += 1
-                    idx += 1
-
-                if idx >= len(x_vals):
-                    x_vals.append(end)
-                    y_vals.append(0)
-                else:
-                    if x_vals[idx] > end:
-                        x_vals.insert(idx, end)
-                        y_vals.insert(idx, y_val)
-                    else:
-                        y_vals[idx] += 1
-
-
+                x_vals.append(val)
+                y_vals.append(o_files)
+            
         print(x_vals)
         print(y_vals)
         plt.step(x_vals, y_vals, where="post")
