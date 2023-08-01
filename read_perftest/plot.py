@@ -63,9 +63,9 @@ if __name__ == '__main__':
         x = [k for k in res]
         success = [ sum(sum(t[1] == 0 for t in arr ) for arr in res[_k]) for _k in x ]
         errors = [ sum(sum(t[1] != 0 for t in arr ) for arr in res[_k]) for _k in x ]
-        plt.bar(x, success, color='b')
         plt.bar(x, errors, color='r')
-        plt.legend(['success', 'error'])
+        plt.bar(x, success, color='b', bottom=errors)
+        plt.legend(['error', 'success'])
     plt.xticks([int(_x) for _x in res])
     if args.title is not None:
         plt.title(args.title)
