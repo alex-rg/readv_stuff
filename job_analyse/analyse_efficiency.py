@@ -47,8 +47,10 @@ if __name__ == '__main__':
         else:
             continue
 
-        if args.strict:
-            if status == 'Failed':
+        failed = 0
+        if status == 'Failed':
+            failed = 1
+            if args.strict:
                 cputime = 0
 
         #Process individual jobs, do not save anything
@@ -61,9 +63,10 @@ if __name__ == '__main__':
                    res[host]['CPUTime'] += cputime
                    res[host]['WALLTime'] += walltime
                    res[host]['cnt'] += 1
+                   res[host]['failed'] += failed
                else:
-                   res[host] = {'CPUTime': cputime, 'WALLTime': walltime, 'cnt': 1}
+                   res[host] = {'CPUTime': cputime, 'WALLTime': walltime, 'cnt': 1, 'failed': failed}
  
     if not nodes:
         for key, res in res.items():
-            print(res['CPUTime'] / res['WALLTime'], key, res['cnt'])
+            print(res['CPUTime'] / res['WALLTime'], key, res['cnt'], res['failed'])
