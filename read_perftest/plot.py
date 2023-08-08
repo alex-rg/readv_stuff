@@ -3,6 +3,7 @@ import re
 import json
 import argparse
 
+import statistics
 import matplotlib.pyplot as plt
 
 
@@ -15,7 +16,9 @@ def parse_args():
     parser.add_argument('-d', '--dpi', help="Image resolution, dpi", default=300, type=int)
     parser.add_argument('-t', '--title', help="Plot title", default=None)
     parser.add_argument('-p', '--plot_type', help="Plot type", choices=['speed', 'errors'], default='speed')
+    parser.add_argument('-P', '--speed_point', help="What points to plot for speed", choices=['average', 'median'], default='speed')
     parser.add_argument('-n', '--nbunch', help="Number of bunches", default=10, type=int)
+    parser.add_argument('-s', '--speed', help="Max WN speed in bytes. If given, a 'theoretical' speed will be plotted also", default=None, type=int)
     return parser.parse_args()
 
 
@@ -42,7 +45,7 @@ if __name__ == '__main__':
                 estat = int(m.group(2))
                 tres.append( (time, estat) )
 
-    print(json.dumps(res, indent=2))
+    #print(json.dumps(res, indent=2))
     if args.plot_type == 'speed':
         for k in res:
             for i, bunch in enumerate(res[k]):
@@ -50,13 +53,28 @@ if __name__ == '__main__':
                 avg = 0
                 n = 0
                 for time, ecode in bunch:
+                    if ecode != 0:
+                        continue
                     speed = 10**9 / time
                     m = min(m, speed)
                     M = max(M, speed)
                     avg += speed
                     n += 1
+                if avg == 0:
+                    continue
                 avg = avg / n
-                plt.errorbar([k + i * 0.03], [avg], [[max(avg-m, 0)], [max(M-avg, 0)]], fmt='o' + colors[i % len(colors)], capsize=6, linewidth=2)
+                med = statistics.median( 10**9 / x[0] for x in bunch)
+                if args.speed_point == 'average':
+                    point = avg
+                elif args.speed_point == 'median':
+                    point = med
+                else:
+                    raise ValueError(f"Incorrect value for {args.speed_point}")
+                plt.errorbar([k + i * 0.03], [point], [[max(point-m, 0)], [max(M-point, 0)]], fmt='o' + colors[i % len(colors)], capsize=6, linewidth=2)
+        if args.speed is not None:
+            t = [4*i for i in range(1, 33)]
+            plt.plot([k for k in t], [args.speed/k for k in t], linewidth=2)
+            plt.legend(['"Theoretical" speed'])
         plt.xlabel('Transfers')
         plt.ylabel('Speed, Bytes/s')
     elif args.plot_type == 'errors':
@@ -66,7 +84,7 @@ if __name__ == '__main__':
         plt.bar(x, errors, color='r')
         plt.bar(x, success, color='b', bottom=errors)
         plt.legend(['error', 'success'])
-    plt.xticks([int(_x) for _x in res])
+    plt.xticks([int(_x) for _x in res], rotation=90)
     if args.title is not None:
         plt.title(args.title)
     plt.savefig(args.output, dpi=args.dpi)
