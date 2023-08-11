@@ -37,7 +37,7 @@ if __name__ == '__main__':
     found = {}
     times = []
     f_open_rexp = re.compile('^(.*) lcg[0-9]+.*File descriptor ([0-9]+) associated to file ([^ ]+) opened in read mode$')
-    f_close_rexp = re.compile('^(.*) lcg[0-9]+.*XrdCephOssBufferedFile::Summary: \{"fd":([0-9]+).*, "path":"([^"]+)",.*')
+    f_close_rexp = re.compile('^(?P<TS>.*) lcg[0-9]+.*XrdCephOssBufferedFile::Summary: \{"fd":(?P<fd>[0-9]+), "Elapsed_time_ms":(?P<elapsed_time>[0-9]+), "path":"(?P<path>[^"]+)", read_B:(?P<read_b>[0-9]+), readV_B:(?P<readv_b>[0-9]+), readAIO_B:(?P<readaio_b>[0-9]+), writeB:(?P<write_b>[0-9]+), writeAIO_B:(?P<writeaio_b>[0-9]+).*')
     with cm(args.file) as fd:
         for line in fd:
             m = f_open_rexp.match(line)
@@ -49,13 +49,22 @@ if __name__ == '__main__':
 
             m = f_close_rexp.match(line)
             if m:
-                ts, fd, path = ts_parser(m.group(1)), int(m.group(2)), m.group(3)
+                ts, fd, path = ts_parser(m.group('TS')), int(m.group('fd')), m.group('path')
+                read_b, readv_b, readaio_b, write_b, writeaio_b = [int(m.group(x)) for x in ('read_b', 'readv_b', 'readaio_b', 'write_b', 'writeaio_b')]
+                elapsed_time = int(m.group('elapsed_time'))
                 try:
                     start = found[(fd, path)]
                 except KeyError:
-                    print("Warning, open log message for file {0} (fd {1}) not found, skipping".format(path, fd), file=sys.stderr)
-                else:
-                    times.append( (start, ts, fd, path) )
+                    if read_b == 0 and readv_b == 0 and readaio_b == 0:
+                        print("Open log message for file {0} (fd {1}) not found, though it looks like it is a write".format(path, fd), file=sys.stderr)
+                    else:
+                        print("Warning, open log message for file {0} (fd {1}) not found, will calculate ts from close message".format(path, fd), file=sys.stderr)
+                        start = ts - elapsed_time // 1000
+                times.append( (start, ts, fd, path) )
+                try:
                     found.pop( (fd, path) )
+                except KeyError:
+                    pass
+
     for start, end, fd, path in times:
         print(start, end, fd, path)
