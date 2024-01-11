@@ -10,6 +10,7 @@ def parse_args():
     g.add_argument("-b", "--boundaries", help="Print efficiencies for nodes with numbers from <a> to <b> inclusive, where '<a>,<b>' is the value", default=None)
     g.add_argument("-n", "--node", help="Print individual job efficiencies for particular node(s). Multiple nodes shoud be comma-separated", default=None)
     parser.add_argument("-s", "--strict", help="Strict mode. For failed jobs cputime is set to 0.", action='store_true')
+    parser.add_argument("-m", "--merge", help="Merge all hosts into a single group.", action='store_true')
     parser.add_argument("file", help="File to parse")
     return parser.parse_args()
 
@@ -59,13 +60,17 @@ if __name__ == '__main__':
         #Process nodes
         else:
             if num >= bot_border and num <= up_border:
-               if host in res:
-                   res[host]['CPUTime'] += cputime
-                   res[host]['WALLTime'] += walltime
-                   res[host]['cnt'] += 1
-                   res[host]['failed'] += failed
+               if args.merge:
+                   key = 'all' if args.boundaries is None else args.boundaries
                else:
-                   res[host] = {'CPUTime': cputime, 'WALLTime': walltime, 'cnt': 1, 'failed': failed}
+                   key = host
+               if key in res:
+                   res[key]['CPUTime'] += cputime
+                   res[key]['WALLTime'] += walltime
+                   res[key]['cnt'] += 1
+                   res[key]['failed'] += failed
+               else:
+                   res[key] = {'CPUTime': cputime, 'WALLTime': walltime, 'cnt': 1, 'failed': failed}
  
     if not nodes:
         for key, res in res.items():
