@@ -69,7 +69,7 @@ class GfalCMDClient(FileAccessClient):
             st = subprocess.run(['gfal-rm', self.url], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             res = st.returncode, st.stdout.decode('utf-8') + '\n\n\n\n' + st.stderr.decode('utf-8')
         else:
-            res = (1, 'Delete refused for safety reasons')
+            res = (1, f'Delete refused for safety reasons: path {self.url} do not match allowed regex')
         return res
 
     def download_file(self, local_path):
@@ -142,7 +142,7 @@ class PyXrootdClient(FileAccessClient):
             else:
                 res = (1, st)
         else:
-            res = (1, 'Delete refused for safety reasons')
+            res = (1, f'Delete refused for safety reasons: path {self.path} does not match allowed regexp')
         return res
 
     def stat_file(self):
