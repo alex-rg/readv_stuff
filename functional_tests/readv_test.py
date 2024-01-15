@@ -128,7 +128,7 @@ class TestReadv:
         n, min_size, max_size, request_end = request.param
         for _ in range(n):
             if request_end > max_size:
-                b = request_end - max_size
+                b = max(request_end - max_size, 0)
             else:
                 b = 0
                 max_size = request_end
@@ -179,7 +179,8 @@ class TestReadv:
         r3 = self.read_local(chunks3, localfile)
         print("CHUNKS=", chunks)
         for d1, d2, d3 in zip(r1, r2, r3):
-            assert d1 == d2 == d3
+            assert d1 == d2
+            assert d2 == d3
 
     def test_copy(self, test_file):
         "Test copy"
