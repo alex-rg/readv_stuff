@@ -19,7 +19,7 @@ from XRootD.client.flags import QueryCode
 from file_access_clients import FallbackClient, PyXrootdClient, GfalCMDClient
 
 
-TEST_FILE_SIZE = 100*1024*1024
+TEST_FILE_SIZE = 1000*1024*1024
 CACHE_SIZE = 4*1024*1024
 BUFFER_SIZE = 1024*1024
 
@@ -42,7 +42,7 @@ class TestReadv:
 
     @pytest.fixture(scope='class')
     def test_file_creation_result(self, test_file_content, request):
-        fd, testfile = mkstemp(dir='./tmp')
+        fd, testfile = mkstemp(dir='/tmp/arogovsk')
         bytes_written = os.write(fd, test_file_content)
         os.close(fd)
         assert bytes_written == TEST_FILE_SIZE
@@ -79,10 +79,14 @@ class TestReadv:
         cls.block_size = int(cls.block_size)
 
         #Get client
-        root_client = PyXrootdClient(cls.url)
-        https_client = GfalCMDClient(root_client.https_url)
-        cls.client = FallbackClient(clients=[root_client, https_client], fallback_methods=['upload_file', 'delete_file'])
-        cls.max_iov = cls.client.get_max_iov()
+        if cls.url.startswith('https'):
+            cls.client = GfalCMDClient(cls.url)
+            cls.max_iov = 1024
+        else:
+            root_client = PyXrootdClient(cls.url)
+            https_client = GfalCMDClient(root_client.https_url)
+            cls.client = FallbackClient(clients=[root_client, https_client], fallback_methods=['upload_file', 'delete_file'])
+            cls.max_iov = cls.client.get_max_iov()
 
     @pytest.fixture
     def file_stat(self):
@@ -120,7 +124,7 @@ class TestReadv:
                     [2**i for i in range(1, 11)],
                     [i for i in range(1, 11)],
                     [2**i for i in range(8, 16)] + [randint(1,1025)],
-                    [i for i in range(CACHE_SIZE, TEST_FILE_SIZE, 3*CACHE_SIZE)],
+                    [i for i in range(CACHE_SIZE, TEST_FILE_SIZE, 30*CACHE_SIZE)],
                 )
         )
     def random_chunks(self, test_file_size, request):
@@ -202,36 +206,47 @@ class TestReadv:
         "test that file size on server match the real one"
         assert file_stat.size == test_file_size
 
-    def test_checksum(self, file_checksum, test_file_checksum):
+    #Execute checksum test two times, to use different test mechanisms
+    @pytest.mark.parametrize("dummy", [x for x in range(3)])
+    def test_checksum(self, file_checksum, test_file_checksum, dummy):
         "test that file size on server match the real one"
         assert file_checksum[1] == test_file_checksum
 
+    @pytest.mark.readv
     def test_single_chunk(self, single_chunk, test_file):
         "Test readv with one chunk"
         self.do_compare(single_chunk, test_file)
 
+    @pytest.mark.readv
     def test_bug_chunks(self, bug_chunks, test_file):
         "Test readv with chunks that cause failure previously due to a bug"
         self.do_compare(bug_chunks, test_file)
 
+    @pytest.mark.readv
     def test_max_chunks(self, max_stable_chunks, test_file, test_file_size):
         "Test readv with maximum number of chunks"
         assert max_stable_chunks[-1][0] + max_stable_chunks[-1][1] == test_file_size
         assert len(max_stable_chunks) == self.max_iov
         self.do_compare(max_stable_chunks, test_file)
 
+    @pytest.mark.readv
+    @pytest.mark.slow
     def test_random_chunks(self, random_chunks, test_file):
         "Test readv with random chunks"
         self.do_compare(random_chunks, test_file)
 
+    @pytest.mark.readv
+    @pytest.mark.slow
     def test_random_chunks_one_byte(self, random_chunks_one_byte, test_file):
         "Test readv with random chunks of 1 byte length"
         self.do_compare(random_chunks_one_byte, test_file)
 
+    @pytest.mark.readv
     def test_block_plus_one_chunks(self, block_borders, test_file):
         "Test readv with chunks spanning multiple blocks"
         self.do_compare(block_borders, test_file)
 
+    @pytest.mark.readv
     @pytest.mark.xfail(strict=True)
     def test_consistency(self, block_borders, test_file, test_file_size):
         "Make sure that compare function does compare something"

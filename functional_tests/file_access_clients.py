@@ -73,19 +73,38 @@ class GfalCMDClient(FileAccessClient):
         return res
 
     def download_file(self, local_path):
-        raise NotImplementedError
+        st = subprocess.run(['gfal-copy', self.url, local_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return st.returncode, st.stdout.decode('utf-8') + '\n\n\n\n' + st.stderr.decode('utf-8')
 
-    def read(self, local_path):
+    def read(self):
         raise NotImplementedError
 
     def readv(self, local_path):
         raise NotImplementedError
 
-    def stat_file(self, local_path):
-        raise NotImplementedError
+    def stat_file(self):
+        st = subprocess.run(['gfal-stat', self.url], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if st.returncode != 0:
+            raise ValueError( "Can not stat {0}: {1}\n{2}".format(self.url, st.stdout.decode('utf-8'), st.stderr.decode('utf-8')) )
+        size = -1
+        for line in st.stdout.decode('utf-8').split('\n'):
+            line = line.strip()
+            print("line={0}".format(line))
+            m = re.match('^Size: ([0-9]+)[^ ].*', line)
+            if m:
+                size = int(m.group(1))
+                break
+        #We need to set size as attr, do it a hacky way:
+        obj = lambda: None
+        obj.size = size
+        return obj
 
-    def get_file_checksum(self, local_path):
-        raise NotImplementedError
+    def get_file_checksum(self):
+        st = subprocess.run(['gfal-sum', self.url, 'adler32'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if st.returncode != 0:
+            raise ValueError( "Can not get checksum for {0}: {1}\n{2}".format(self.url, st.stdout.decode('utf-8'), st.stderr.decode('utf-8')) )
+        csum = re.sub('^[^ ]* ', '', st.stdout.decode('utf-8').strip())
+        return (0, csum)
 
 
 
