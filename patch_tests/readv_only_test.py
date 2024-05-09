@@ -170,7 +170,7 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
     with client.File() as f:
         f.open(file_url)
         status, stat = f.stat()
-        print("Open status:",  status)
+        print("Open status:",  status, file_url)
         if not status.ok:
             raise ValueError(f"Failed to stat file {file_url}")
         size = stat.size
