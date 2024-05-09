@@ -170,6 +170,7 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
     with client.File() as f:
         f.open(file_url)
         status, stat = f.stat()
+        res = 0
         print("Open status:",  status, file_url)
         if not status.ok:
             raise ValueError(f"Failed to stat file {file_url}")
@@ -190,9 +191,11 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
             status, response = f.vector_read(chunks=chunks)
             if not status.ok:
                 print(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
+                res = 1
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
     jobsim_chunks.iter = 0
+    return res
 
 
 
@@ -202,6 +205,7 @@ if __name__ == '__main__':
     #server = parse_res.scheme + '://' + parse_res.netloc
     #max_iov, max_ior = get_server_limits(server)
     #while True:
+    res = 0
     for _ in range(args.nfiles):
         if args.url:
             url = args.url
@@ -217,4 +221,7 @@ if __name__ == '__main__':
                     url = None
         if url is None:
             url = args.dump_url
-        do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
+        tres = do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
+        if tres == 1:
+            res = 16
+    sys.exit(res)
