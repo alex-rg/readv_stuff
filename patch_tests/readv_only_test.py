@@ -35,6 +35,7 @@ def parse_args():
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-l', '--url_list', help="list of urls that can be used for tests")
     g.add_argument('-u', '--url', help="Url to use for tests.")
+    g.add_argument('-d', '--dump_url', help="Url of the storage dump.")
     parser.add_argument('-n', '--ntimes', help="How many readvs should be issued for a single url. Default is 1", default=1, type=int)
     parser.add_argument('-N', '--nfiles', help="How many files we should test. Default is 1", default=1, type=int)
     parser.add_argument('-t', '--test_type', help="Which test to perform: random or border.", choices=['random', 'border', 'lhcb_job'], default='random')
@@ -71,7 +72,7 @@ def jobsim_chunks(n, size, scatter, max_len, max_iter):
     else:
         jobsim_chunks.iter = 1
     if jobsim_chunks.iter > max_iter:
-        raise ValueError("Too many iterations, reset the counter")
+        jobsim_chunks.iter = 1
     if scatter + max_len + 1 > size:
         raise ValueError("File size is too small: {0} while scatter is {1}".format(size, scatter))
 
@@ -101,6 +102,70 @@ def border_chunks(n, size, block_size=8*1024*1024):
     return [x for x in chunks]
 
 
+def random_file_from_dump(dump_url):
+    def get_lines(f, offset, length):
+        status, chunk = f.read(offset=offset, size=length)
+        if not status.ok or len(chunk) != length:
+            raise RuntimeError(f"failed to read dump file {dump_url}: {status.code} {status.message}, length: {len(chunk)}")
+        return chunk.decode('utf-8').split('\n')
+
+    max_line_length = 50000
+    with client.File() as f:
+        status, data = f.open(dump_url)
+        if not status.ok:
+            raise RuntimeError(f"failed to open dump file {dump_url}: {status.code} {status.message}")
+        status, stat = f.stat()
+
+        if not status.ok:
+            raise RuntimeError(f"failed to stat dump file {dump_url}: {status.code} {status.message}")
+
+        size = stat.size
+        if size < max_line_length:
+            raise RuntimeError(f"Dump {dump_url} is too small")
+
+        offset = randint(0, size - max_line_length)
+        newlines_found = 0
+        res = ''
+        itr = 1000
+        while newlines_found < 2 or itr <= 0:
+            lines = get_lines(f, offset, max_line_length)
+            llen = len(lines)
+            if llen >=3:
+                #Prefer 'prod' lines, but if there are none, select whatever is available
+                res = lines[1]
+                for l in lines[1:-1]:
+                    if l.startswith('prod'):
+                        res = l
+                        break
+            elif llen == 2:
+                if newlines_found == 1:
+                    res += lines[0]
+                else:
+                    res += lines[1]
+            else:
+                if newlines_found == 1:
+                    res += lines[0]
+            newlines_found += llen - 1
+            offset += max_line_length
+            itr -= 1
+        if itr <= 0:
+            res = None
+        return res
+
+
+def check_file(dump_url):
+    res = False
+    with client.File() as f:
+        status, data = f.open(dump_url)
+        if status.ok:
+            status, stat = f.stat()
+            if status.ok:
+                size = stat.size
+                if size >= 2*1000**3:
+                    res = True
+    return res
+
+
 def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True):
     with client.File() as f:
         f.open(file_url)
@@ -126,7 +191,7 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
             if not status.ok:
                 print(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
             else:
-                print(f"Readv finished successfully: {status}", file=sys.stderr)
+                print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
     jobsim_chunks.iter = 0
 
 
@@ -140,6 +205,16 @@ if __name__ == '__main__':
     for _ in range(args.nfiles):
         if args.url:
             url = args.url
-        else:
+        elif args.url_list:
             url = random_line(args.url_list)
+        elif args.dump_url:
+            for _ in range(1000):
+                url = random_file_from_dump(args.dump_url)
+                url = ''.join(args.dump_url.split(':accounting')[0] + ':' + url)
+                if check_file(url):
+                    break
+                else:
+                    url = None
+        if url is None:
+            url = args.dump_url
         do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
