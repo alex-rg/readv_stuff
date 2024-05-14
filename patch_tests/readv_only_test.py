@@ -197,7 +197,8 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 res = 1
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
-            dummy_sum += math.sqrt(itr) + math.sin(itr) + math.cos(itr)
+            for j in range(itr**2):
+                dummy_sum += math.sqrt(j) + math.sin(j) + math.cos(j)
     print("Sum=", dummy_sum)
 
     #jobsim_chunks.iter = 0
