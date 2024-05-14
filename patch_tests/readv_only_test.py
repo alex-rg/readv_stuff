@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import math
 import sys
 
 from random import randint
@@ -66,22 +67,22 @@ def random_chunks(n, size, scatter, max_len, interval=None):
     return [x for x in chunks]
 
 
-def jobsim_chunks(n, size, scatter, max_len, max_iter):
-    if hasattr(jobsim_chunks, "iter"):
-        jobsim_chunks.iter += 1
-    else:
-        jobsim_chunks.iter = 1
-    if jobsim_chunks.iter > max_iter:
-        jobsim_chunks.iter = 1
+def jobsim_chunks(n, size, scatter, max_len, max_iter, itr):
+    #if hasattr(jobsim_chunks, "iter"):
+    #    jobsim_chunks.iter += 1
+    #else:
+    #    jobsim_chunks.iter = 1
+    if itr > max_iter:
+        itr = 1
     if scatter + max_len + 1 > size:
         raise ValueError("File size is too small: {0} while scatter is {1}".format(size, scatter))
 
-    if jobsim_chunks.iter == 1:
+    if itr == 1:
         interval = (0, scatter)
-    elif jobsim_chunks.iter == 2:
+    elif itr == 2:
         interval = (size - scatter - max_len - 1, size - 1 - max_len)
     else:
-        start = int( (size - scatter) * jobsim_chunks.iter / max_iter )
+        start = int( (size - scatter) * itr / max_iter )
         interval = ( min(start, size - max_len - 2) , min(start + scatter, size - max_len - 1))
     return random_chunks(n, None, None, max_len, interval)
 
@@ -167,6 +168,8 @@ def check_file(dump_url):
 
 
 def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True):
+    #Dummy sum operation, to do some CPU work and prevent job from stalling
+    dummy_sum = 0
     with client.File() as f:
         f.open(file_url)
         status, stat = f.stat()
@@ -175,13 +178,13 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
         if not status.ok:
             raise ValueError(f"Failed to stat file {file_url}")
         size = stat.size
-        for __ in range(ntimes):
+        for itr in range(ntimes):
             if test_type == 'random':
                 chunks = random_chunks(nchunks, size, scatter, max_len)
             elif test_type == 'border':
                 chunks = border_chunks(nchunks, size)
             elif test_type == 'lhcb_job':
-                chunks = jobsim_chunks(nchunks, size, scatter, max_len, ntimes)
+                chunks = jobsim_chunks(nchunks, size, scatter, max_len, ntimes, itr=itr)
             else:
                 raise ValueError("Wrong test type: {0}".format(test_type))
 
@@ -194,7 +197,10 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 res = 1
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
-    jobsim_chunks.iter = 0
+            dummy_sum += math.sqrt(itr) + math.sin(itr) + math.cos(itr)
+    print("Sum=", dummy_sum)
+
+    #jobsim_chunks.iter = 0
     return res
 
 
