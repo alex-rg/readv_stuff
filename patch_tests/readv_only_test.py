@@ -7,6 +7,8 @@ from random import randint
 from urllib.parse import urlparse
 from os import stat
 
+from threading import Thread
+
 from XRootD import client
 from XRootD.client.flags import QueryCode
 
@@ -197,14 +199,22 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 res = 1
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
-            for j in range(itr**2):
-                dummy_sum += math.sqrt(j) + math.sin(j) + math.cos(j)
-    print("Sum=", dummy_sum)
-
     #jobsim_chunks.iter = 0
     return res
 
+def count_primes(n):
+    global fin
+    cnt = 0
+    for j in range(1, n):
+        for i in range(1, int(math.sqrt(j))):
+            if fin:
+                return
+            if j % i == 0:
+                cnt += 1
+                break
+    return cnt
 
+fin = False
 
 if __name__ == '__main__':
     args = parse_args()
@@ -212,6 +222,8 @@ if __name__ == '__main__':
     #server = parse_res.scheme + '://' + parse_res.netloc
     #max_iov, max_ior = get_server_limits(server)
     #while True:
+    thr = Thread(target=count_primes, name="Dummy_cpu", args=[100000000000])
+    thr.start()
     res = 0
     for _ in range(args.nfiles):
         if args.url:
@@ -231,4 +243,5 @@ if __name__ == '__main__':
         tres = do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
         if tres == 1:
             res = 16
+    fin = True
     sys.exit(res)
