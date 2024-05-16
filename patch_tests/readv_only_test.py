@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from os import stat
 
 from threading import Thread
+from time import time
 
 from XRootD import client
 from XRootD.client.flags import QueryCode
@@ -176,10 +177,11 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
         f.open(file_url)
         status, stat = f.stat()
         res = 0
-        print("Open status:",  status, file_url)
+        print("Stat status:",  status, file_url, file=sys.stderr)
         if not status.ok:
             raise ValueError(f"Failed to stat file {file_url}")
         size = stat.size
+        avg_time = 0
         for itr in range(ntimes):
             if test_type == 'random':
                 chunks = random_chunks(nchunks, size, scatter, max_len)
