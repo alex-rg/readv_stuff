@@ -8,7 +8,8 @@ from urllib.parse import urlparse
 from os import stat
 
 from threading import Thread
-from time import time
+from queue import Queue
+from time import time, sleep
 
 from XRootD import client
 from XRootD.client.flags import QueryCode
@@ -47,6 +48,19 @@ def parse_args():
     parser.add_argument('-S', '--scatter', help="Scatter of the readv chunks. Default if 4MB.", type=int, default=4*1024*1024)
     parser.add_argument('-c', '--chunks_sorted', help="Sort chunks in requests.", action='store_true')
     parser.add_argument('-C', '--chunks_number', help="Number of chunks in a single request.", type=int, default=1024)
+    parser.add_argument(
+            '-a',
+            '--add_compute_work',
+            help="Not only do readvs, but also some compute operations. May be useful to determine how readvs affect CPU efficiency or to prevent jobs from being killed by ",
+            default=1,
+            action='store_true'
+        )
+    parser.add_argument('-b',
+            '--barrier',
+            help="How often should compute thread and readv thread 'Synchronize', in division ops. Only make sense if -a is given",
+            type=int,
+            default=4000000
+        )
     args = parser.parse_args()
     return args
 
@@ -172,6 +186,7 @@ def check_file(dump_url):
 
 def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True):
     #Dummy sum operation, to do some CPU work and prevent job from stalling
+    global queue
     dummy_sum = 0
     with client.File() as f:
         f.open(file_url)
@@ -195,28 +210,41 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
             if sorted_chunks:
                 chunks = sorted(chunks, key=lambda x: x[0])
 
+            start = time()
+            #sleep(0.6)
             status, response = f.vector_read(chunks=chunks)
+            queue.put_nowait(1)
+            duration =  time() - start
+            avg_time += duration
             if not status.ok:
                 print(f"Failed to readv file, status={status}, resp={response}, chunks={chunks if not silent else len(chunks)}")
                 res = 1
             else:
-                print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}", file=sys.stderr)
+                print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}, lasted {duration} secs", file=sys.stderr)
+        print(f"Average readv time: {avg_time / ntimes}")
     #jobsim_chunks.iter = 0
     return res
 
-def count_primes(n):
+def count_primes(n, barrier):
     global fin
+    global queue
     cnt = 0
+    op_count = 0
     for j in range(1, n):
         for i in range(1, int(math.sqrt(j))):
             if fin:
                 return
-            if j % i == 0:
-                cnt += 1
-                break
+            else:
+                if (1 + op_count) % barrier == 0:
+                    _ = queue.get(timeout=300)
+                op_count += 1
+                if j % i == 0:
+                    cnt += 1
+                    break
     return cnt
 
 fin = False
+queue = Queue()
 
 if __name__ == '__main__':
     args = parse_args()
@@ -224,8 +252,9 @@ if __name__ == '__main__':
     #server = parse_res.scheme + '://' + parse_res.netloc
     #max_iov, max_ior = get_server_limits(server)
     #while True:
-    thr = Thread(target=count_primes, name="Dummy_cpu", args=[100000000000])
-    thr.start()
+    if args.add_compute_work:
+        thr = Thread(target=count_primes, name="Dummy_cpu", args=[100000000000, args.barrier])
+        thr.start()
     res = 0
     for _ in range(args.nfiles):
         if args.url:
@@ -246,4 +275,5 @@ if __name__ == '__main__':
         if tres == 1:
             res = 16
     fin = True
+    queue.put_nowait(1)
     sys.exit(res)
