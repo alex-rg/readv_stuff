@@ -74,7 +74,7 @@ if __name__ == '__main__':
         if args.speed is not None:
             t = [4*i for i in range(1, 33)]
             plt.plot([k for k in t], [args.speed/k for k in t], linewidth=2)
-            plt.legend(['"Theoretical" speed'])
+            plt.legend([f'{args.speed/(1000*1000)} MB/s'])
         plt.xlabel('Transfers')
         plt.ylabel('Speed, Bytes/s')
     elif args.plot_type == 'errors':

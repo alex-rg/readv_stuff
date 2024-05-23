@@ -58,6 +58,7 @@ if __name__ == '__main__':
                 idx += 1
     else:
         #res = [(2, 3), (1, 4), (1, 10), (2, 12)]
+        Min, Max = 10**10, -1
         keys = [x for x in res.keys()]
         for k in keys:
             x_vals = []
@@ -77,10 +78,12 @@ if __name__ == '__main__':
                     x_vals.append(val)
                     y_vals.append(o_files)
             plt.step(x_vals, y_vals, where="post")
+            Min = min(x_vals[0], Min)
+            Max = max(x_vals[-1], Max)
         plt.legend(keys)
         plt.ylabel('nofiles')
         plt.ylim(bottom=0)
-        plt.xlim(min(x_vals), max(x_vals))
+        plt.xlim(Min, Max)
     if args.title:
         plt.title(args.title)
     xticks = plt.xticks()
