@@ -1,3 +1,4 @@
+
 - name: setup build environment for xrootd
   hosts: localhost
   vars:
@@ -5,15 +6,16 @@
     clean_xrdceph_dirs: 1
     clean_xrootd_dirs: 1
     build_xrootd: 1
-    build_xrdceph: 1
+    build_xrdceph: 0
     xrdceph_package_name: "xrootd-ceph"
 
     xrootd_repo_url: "https://github.com/alex-rg/xrootd"
     xrdceph_repo_url: "https://github.com/stfc/xrootd-ceph"
-    xrootd_branch: "version_533_with_dh_fix"
+    xrootd_branch: "pfc_nowrite"
     xrdceph_branch: "bufferedIO"
-    xrootd_version: "5.3.3-15"
+    xrootd_version: "5.6.9"
     xrdceph_version: "5.5.4-10"
+    xrootd_commit_hash: 0
 
     build_dir: /root/build
     src_dir: /root/src
@@ -42,72 +44,143 @@
       state: directory
     loop: ["{{xrootd_build_dir}}", "{{xrdceph_build_dir}}", "{{xrootd_src_dir}}", "{{xrdceph_src_dir}}", "{{xrootd_build_dir}}/RPMS"]
 
-  - name: install ceph repo
-    copy:
-      content: |
-        [ceph-el7-x86_64]
-        name = ceph-el7-x86_64
-        baseurl = http://mirrors.gridpp.rl.ac.uk/current/ceph-el7-x86_64/RPMS.nautilus/
-        metadata_expire = 7d
-        enabled = 1
-        gpgcheck = 0
-        priority = 40
-        skip_if_unavailable = 0
-      dest: /etc/yum.repos.d/ceph.repo
-      owner: root
-      group: root
-      mode: 0644
+#  - name: install ceph repo
+#    copy:
+#      content: |
+#        [ceph-el7-x86_64]
+#        name = ceph-el7-x86_64
+#        baseurl = http://mirrors.gridpp.rl.ac.uk/current/ceph-el7-x86_64/RPMS.nautilus/
+#        metadata_expire = 7d
+#        enabled = 1
+#        gpgcheck = 0
+#        priority = 40
+#        skip_if_unavailable = 0
+#      dest: /etc/yum.repos.d/ceph.repo
+#      owner: root
+#      group: root
+#      mode: 0644
 
-  - name: install build packages
-    yum:
-      name: "{{item}}"
-      state: present
-    loop:
-    - cmake3
-    - git
-    - centos-release-scl
-    - devtoolset-7
-    - librados2-devel
-    - libradospp-devel
-    - libradosstriper-devel
-    - krb5-devel
-    - readline-devel
-    - fuse-devel
-    - libxml2-devel
-    - zlib-devel
-    - ncurses-devel
-    - libcurl-devel
-    - libuuid-devel
-    - voms-devel
-    - libmacaroons-devel
-    - json-c-devel
-    - python2-devel
-    - python3-devel
-    - openssl-devel
-    - selinux-policy-devel
-    - doxygen
-    - graphviz
-    - systemd-devel
-    - rpm-build
-    - scitokens-cpp-devel
-
-  - name: build xrootd
+  - name: CentOS7
     block:
-    - name: clone Xrootd repository
+    - name: install build packages
+      yum:
+        name: "{{item}}"
+        state: present
+      loop:
+      - cmake3
+      - git
+      - centos-release-scl
+      - devtoolset-7
+  #    - librados2-devel
+  #    - libradospp-devel
+  #    - libradosstriper-devel
+      - krb5-devel
+      - readline-devel
+      - fuse-devel
+      - libxml2-devel
+      - zlib-devel
+      - ncurses-devel
+      - libcurl-devel
+      - libuuid-devel
+      - voms-devel
+      - libmacaroons-devel
+      - json-c-devel
+      - python2-devel
+      - python3-devel
+      - openssl-devel
+      - selinux-policy-devel
+      - doxygen
+      - graphviz
+      - systemd-devel
+      - rpm-build
+      - scitokens-cpp-devel
+
+    - name: build xrootd
+      block:
+      - name: clone Xrootd repository
+        command:
+          cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}"
+          chdir: "{{xrootd_src_dir}}"
+
+      - name: create srpm
+        command:
+          cmd: "./makesrpm.sh --version {{xrootd_version}} --define '_with_python3 1' --define '_with_tests 1' --define '_with_scitokens 1' --output {{xrootd_build_dir}}"
+          chdir: "{{xrootd_src_dir}}/xrootd/packaging"
+
+      - name: build rpm
+        shell:
+          cmd: rpmbuild --rebuild --define "_rpmdir RPMS/" --define "_with_python3 1" --define "_with_scitokens 1"  --define "_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" -D "dist .el7"  *.src.rpm
+          chdir: "{{xrootd_build_dir}}"
+      when: build_xrootd == 1
+    when: ansible_distribution_major_version == 7
+
+  - name: EL8
+    vars:
+      home: "{{ansible_env['HOME']}}"
+    block:
+    - name: create rpmbuild dirs
+      file:
+        state: directory
+        path: "{{home}}/rpmbuild/{{item}}"
+        owner: root
+        group: root
+        mode: 0755
+      loop: ['', 'RPMS', 'SOURCES', 'SPECS']
+
+    - name: install build packages
+      dnf:
+        name: "{{item}}"
+        state: present
+        enablerepo: "*devel"
+      loop:
+      - cppunit-devel
+      - davix-devel
+      - fuse-devel
+      - gtest-devel
+      - isa-l-devel
+      - json-c-devel
+      - libmacaroons-devel
+      - perl-generators
+      - python3-devel
+      - python3-wheel
+      - scitokens-cpp-devel
+      - selinux-policy-devel
+      - systemd-devel
+      - tinyxml-devel
+      - voms-devel
+
+    - name: clone xrootd repository
       command:
-        cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}"
+        cmd: git clone -b "{{xrootd_branch}}" "{{xrootd_repo_url}}" .
         chdir: "{{xrootd_src_dir}}"
 
-    - name: create srpm
+    - name: select appropriate commit
       command:
-        cmd: "./makesrpm.sh --version {{xrootd_version}} --define '_with_python3 1' --define '_with_tests 1' --define '_with_scitokens 1' --output {{xrootd_build_dir}}"
-        chdir: "{{xrootd_src_dir}}/xrootd/packaging"
+        cmd: git reset --hard "{{xrootd_commit_hash}}"
+        chdir: "{{xrootd_src_dir}}"
+      when: xrootd_commit_hash != 0
+
+    - name: create tarball
+      command:
+        cmd: "git archive -o {{home}}/rpmbuild/SOURCES/xrootd-{{xrootd_version}}.tar.gz --prefix /xrootd-{{xrootd_version}}/ HEAD"
+        chdir: "{{xrootd_src_dir}}"
+
+    - name: copy spec
+      copy:
+        src: "{{xrootd_src_dir}}/xrootd.spec"
+        dest: "{{home}}/rpmbuild/SPECS/xrootd.spec"
+        remote_src: true
+
+    - name: install python3.12-devel
+      dnf:
+        name: python3.12-devel
+        state: present
 
     - name: build rpm
-      shell:
-        cmd: rpmbuild --rebuild --define "_rpmdir RPMS/" --define "_with_python3 1" --define "_with_scitokens 1"  --define "_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" -D "dist .el7"  *.src.rpm
-        chdir: "{{xrootd_build_dir}}"
-    when: build_xrootd == 1
+      command:
+        cmd: "rpmbuild -ba SPECS/xrootd.spec"
+        chdir: "{{home}}/rpmbuild"
+
 
   - name: build xrdceph
     block:
