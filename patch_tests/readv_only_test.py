@@ -61,6 +61,7 @@ def parse_args():
             type=int,
             default=4000000
         )
+    parser.add_argument('-w', '--wait_time', help="Seconds to wait after every readv", type=int, default=5)
     args = parser.parse_args()
     return args
 
@@ -184,7 +185,7 @@ def check_file(dump_url):
     return res
 
 
-def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True):
+def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024, max_len=1024, test_type='random', silent=False, sorted_chunks=True, wait_time=None):
     #Dummy sum operation, to do some CPU work and prevent job from stalling
     global queue
     dummy_sum = 0
@@ -221,6 +222,10 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
                 res = 1
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}, lasted {duration} secs", file=sys.stderr)
+            if wait_time:
+                print("Sleeping start")
+                sleep(wait_time)
+                print("Sleeping end")
         print(f"Average readv time: {avg_time / ntimes}")
     #jobsim_chunks.iter = 0
     return res
@@ -231,7 +236,7 @@ def count_primes(n, barrier):
     cnt = 0
     op_count = 0
     for j in range(1, n):
-        for i in range(1, int(math.sqrt(j))):
+        for i in range(2, int(math.sqrt(j))):
             if fin:
                 return
             else:
@@ -271,9 +276,10 @@ if __name__ == '__main__':
                     url = None
         if url is None:
             url = args.dump_url
-        tres = do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number)
+        tres = do_readvs(url, max_len=8192, test_type=args.test_type, silent=args.silent, ntimes=args.ntimes, scatter=args.scatter, sorted_chunks=args.chunks_sorted, nchunks=args.chunks_number, wait_time=args.wait_time)
         if tres == 1:
             res = 16
     fin = True
     queue.put_nowait(1)
+    thr.join()
     sys.exit(res)
