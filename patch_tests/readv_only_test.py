@@ -223,9 +223,9 @@ def do_readvs(file_url, scatter=128*1024*1024 + 1024*16, ntimes=2, nchunks=1024,
             else:
                 print(f"Readv finished successfully: {status}, min_offset={min(x[0] for x in chunks)}, max_offset={max(x[1] + x[0] for x in chunks)}, lasted {duration} secs", file=sys.stderr)
             if wait_time:
-                print("Sleeping start")
+                print("Sleeping start", file=sys.stderr)
                 sleep(wait_time)
-                print("Sleeping end")
+                print("Sleeping end", file=sys.stderr)
         print(f"Average readv time: {avg_time / ntimes}")
     #jobsim_chunks.iter = 0
     return res
