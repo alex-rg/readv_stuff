@@ -61,7 +61,7 @@ def parse_args():
             type=int,
             default=4000000
         )
-    parser.add_argument('-w', '--wait_time', help="Seconds to wait after every readv", type=int, default=5)
+    parser.add_argument('-w', '--wait_time', help="Seconds to wait after every readv", type=int, default=None)
     args = parser.parse_args()
     return args
 
