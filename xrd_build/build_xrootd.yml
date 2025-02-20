@@ -11,9 +11,10 @@
 
     xrootd_repo_url: "https://github.com/alex-rg/xrootd"
     xrdceph_repo_url: "https://github.com/stfc/xrootd-ceph"
-    xrootd_branch: "pfc_nowrite"
+    xrootd_branch: "add_redirection"
     xrdceph_branch: "bufferedIO"
-    xrootd_version: "5.6.9"
+    xrootd_version: "5.7.1.redir"
+    xrootd_version_simple: "5.7.1"
     xrdceph_version: "5.5.4-10"
     xrootd_commit_hash: 0
 
@@ -162,7 +163,7 @@
 
     - name: create tarball
       command:
-        cmd: "git archive -o {{home}}/rpmbuild/SOURCES/xrootd-{{xrootd_version}}.tar.gz --prefix /xrootd-{{xrootd_version}}/ HEAD"
+        cmd: "git archive -o {{home}}/rpmbuild/SOURCES/xrootd-{{xrootd_version_simple}}.tar.gz --prefix /xrootd-{{xrootd_version_simple}}/ HEAD"
         chdir: "{{xrootd_src_dir}}"
 
     - name: copy spec
